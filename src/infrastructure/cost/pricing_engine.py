@@ -8,20 +8,23 @@ are in EUR.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
-from typing import Optional, Sequence
+from typing import TYPE_CHECKING
 
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 # ======================================================================
 # Resource types
 # ======================================================================
 
+
 class ResourceType(str, Enum):
-    CPU = "cpu"              # unit: vCPU-hour
-    MEMORY = "memory"        # unit: GB-hour
-    STORAGE = "storage"      # unit: GB-day
-    NETWORK = "network"      # unit: GB
+    CPU = "cpu"  # unit: vCPU-hour
+    MEMORY = "memory"  # unit: GB-hour
+    STORAGE = "storage"  # unit: GB-day
+    NETWORK = "network"  # unit: GB
     API_CALLS = "api_calls"  # unit: call
 
 
@@ -30,10 +33,10 @@ class ResourceType(str, Enum):
 # ======================================================================
 
 DEFAULT_PRICING: dict[ResourceType, float] = {
-    ResourceType.CPU: 0.02,        # EUR per vCPU-hour
-    ResourceType.MEMORY: 0.005,    # EUR per GB-hour
-    ResourceType.STORAGE: 0.01,    # EUR per GB-day
-    ResourceType.NETWORK: 0.001,   # EUR per GB
+    ResourceType.CPU: 0.02,  # EUR per vCPU-hour
+    ResourceType.MEMORY: 0.005,  # EUR per GB-hour
+    ResourceType.STORAGE: 0.01,  # EUR per GB-day
+    ResourceType.NETWORK: 0.001,  # EUR per GB
     ResourceType.API_CALLS: 0.0001,  # EUR per call
 }
 
@@ -41,6 +44,7 @@ DEFAULT_PRICING: dict[ResourceType, float] = {
 # ======================================================================
 # Result data structures
 # ======================================================================
+
 
 @dataclass(frozen=True)
 class LineItem:
@@ -84,6 +88,7 @@ class ProjectedCost:
 # Pricing engine
 # ======================================================================
 
+
 class PricingEngine:
     """
     Stateless calculator that turns usage records into costs.
@@ -94,7 +99,7 @@ class PricingEngine:
 
     def __init__(
         self,
-        pricing: Optional[dict[ResourceType, float]] = None,
+        pricing: dict[ResourceType, float] | None = None,
     ) -> None:
         self._pricing: dict[ResourceType, float] = {**DEFAULT_PRICING}
         if pricing:
@@ -108,7 +113,7 @@ class PricingEngine:
         self,
         resource_type: ResourceType,
         quantity: float,
-        custom_price: Optional[float] = None,
+        custom_price: float | None = None,
     ) -> LineItem:
         """
         Calculate cost for a single resource type and quantity.
@@ -136,7 +141,7 @@ class PricingEngine:
     def calculate_period_cost(
         self,
         usage_records: Sequence[UsageRecord],
-        pricing: Optional[dict[ResourceType, float]] = None,
+        pricing: dict[ResourceType, float] | None = None,
     ) -> PeriodCost:
         """
         Aggregate multiple usage records into a single ``PeriodCost``.

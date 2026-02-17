@@ -8,22 +8,21 @@ suitable for testing and local development.
 from __future__ import annotations
 
 import random
-import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from datetime import datetime, timezone
-from typing import Any, Optional, Protocol
+from datetime import UTC, datetime
 
 import httpx
-
 
 # ======================================================================
 # Data structures
 # ======================================================================
 
+
 @dataclass(frozen=True)
 class DataPoint:
     """A single timestamped metric value."""
+
     timestamp: datetime
     value: float
 
@@ -31,6 +30,7 @@ class DataPoint:
 # ======================================================================
 # Abstract interface
 # ======================================================================
+
 
 class MetricsCollector(ABC):
     """
@@ -42,14 +42,12 @@ class MetricsCollector(ABC):
     @abstractmethod
     async def get_cpu_usage(
         self, tenant_id: str, start: datetime, end: datetime
-    ) -> list[DataPoint]:
-        ...
+    ) -> list[DataPoint]: ...
 
     @abstractmethod
     async def get_memory_usage(
         self, tenant_id: str, start: datetime, end: datetime
-    ) -> list[DataPoint]:
-        ...
+    ) -> list[DataPoint]: ...
 
     @abstractmethod
     async def get_storage_usage(self, tenant_id: str) -> int:
@@ -57,15 +55,13 @@ class MetricsCollector(ABC):
         ...
 
     @abstractmethod
-    async def get_api_call_count(
-        self, tenant_id: str, start: datetime, end: datetime
-    ) -> int:
-        ...
+    async def get_api_call_count(self, tenant_id: str, start: datetime, end: datetime) -> int: ...
 
 
 # ======================================================================
 # Prometheus client wrapper
 # ======================================================================
+
 
 class PrometheusClient:
     """Thin wrapper around the Prometheus HTTP query API."""
@@ -91,9 +87,7 @@ class PrometheusClient:
         }
 
         async with httpx.AsyncClient(timeout=self._timeout) as client:
-            resp = await client.get(
-                f"{self._base_url}/api/v1/query_range", params=params
-            )
+            resp = await client.get(f"{self._base_url}/api/v1/query_range", params=params)
             resp.raise_for_status()
             data = resp.json()
 
@@ -102,7 +96,7 @@ class PrometheusClient:
             for ts, val in result.get("values", []):
                 points.append(
                     DataPoint(
-                        timestamp=datetime.fromtimestamp(float(ts), tz=timezone.utc),
+                        timestamp=datetime.fromtimestamp(float(ts), tz=UTC),
                         value=float(val),
                     )
                 )
@@ -112,9 +106,7 @@ class PrometheusClient:
         """Execute an instant query and return a single scalar value."""
 
         async with httpx.AsyncClient(timeout=self._timeout) as client:
-            resp = await client.get(
-                f"{self._base_url}/api/v1/query", params={"query": query}
-            )
+            resp = await client.get(f"{self._base_url}/api/v1/query", params={"query": query})
             resp.raise_for_status()
             data = resp.json()
 
@@ -130,6 +122,7 @@ class PrometheusClient:
 # Prometheus-backed collector
 # ======================================================================
 
+
 class PrometheusMetricsCollector(MetricsCollector):
     """Production collector backed by a live Prometheus instance."""
 
@@ -140,7 +133,7 @@ class PrometheusMetricsCollector(MetricsCollector):
         self, tenant_id: str, start: datetime, end: datetime
     ) -> list[DataPoint]:
         query = (
-            f'sum(rate(container_cpu_usage_seconds_total'
+            f"sum(rate(container_cpu_usage_seconds_total"
             f'{{tenant_id="{tenant_id}"}}[5m])) by (tenant_id)'
         )
         return await self._client.query_range(query, start, end)
@@ -148,24 +141,17 @@ class PrometheusMetricsCollector(MetricsCollector):
     async def get_memory_usage(
         self, tenant_id: str, start: datetime, end: datetime
     ) -> list[DataPoint]:
-        query = (
-            f'sum(container_memory_usage_bytes'
-            f'{{tenant_id="{tenant_id}"}}) by (tenant_id)'
-        )
+        query = f"sum(container_memory_usage_bytes" f'{{tenant_id="{tenant_id}"}}) by (tenant_id)'
         return await self._client.query_range(query, start, end)
 
     async def get_storage_usage(self, tenant_id: str) -> int:
-        query = (
-            f'sum(tenant_storage_bytes{{tenant_id="{tenant_id}"}})'
-        )
+        query = f'sum(tenant_storage_bytes{{tenant_id="{tenant_id}"}})'
         value = await self._client.query_instant(query)
         return int(value)
 
-    async def get_api_call_count(
-        self, tenant_id: str, start: datetime, end: datetime
-    ) -> int:
+    async def get_api_call_count(self, tenant_id: str, start: datetime, end: datetime) -> int:
         query = (
-            f'sum(increase(api_requests_total'
+            f"sum(increase(api_requests_total"
             f'{{tenant_id="{tenant_id}"}}[{_range_seconds(start, end)}s]))'
         )
         value = await self._client.query_instant(query)
@@ -175,6 +161,7 @@ class PrometheusMetricsCollector(MetricsCollector):
 # ======================================================================
 # Mock collector (development / testing)
 # ======================================================================
+
 
 class MockMetricsCollector(MetricsCollector):
     """Deterministic mock that returns synthetic data for tests."""
@@ -195,9 +182,7 @@ class MockMetricsCollector(MetricsCollector):
     async def get_storage_usage(self, tenant_id: str) -> int:
         return self._rng.randint(1_000_000_000, 50_000_000_000)
 
-    async def get_api_call_count(
-        self, tenant_id: str, start: datetime, end: datetime
-    ) -> int:
+    async def get_api_call_count(self, tenant_id: str, start: datetime, end: datetime) -> int:
         hours = max(1, int((end - start).total_seconds() / 3600))
         return self._rng.randint(100, 500) * hours
 
@@ -216,9 +201,7 @@ class MockMetricsCollector(MetricsCollector):
         while current <= end:
             value = base + self._rng.uniform(-jitter, jitter)
             points.append(DataPoint(timestamp=current, value=max(0.0, value)))
-            current = current.replace(
-                second=current.second
-            )  # avoid microsecond drift
+            current = current.replace(second=current.second)  # avoid microsecond drift
             # Manually advance by step.
             from datetime import timedelta
 
@@ -229,6 +212,7 @@ class MockMetricsCollector(MetricsCollector):
 # ======================================================================
 # Utilities
 # ======================================================================
+
 
 def _range_seconds(start: datetime, end: datetime) -> int:
     """Return the number of whole seconds between *start* and *end*."""

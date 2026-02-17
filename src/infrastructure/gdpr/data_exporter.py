@@ -14,15 +14,14 @@ import json
 import os
 import tarfile
 import tempfile
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from pathlib import Path
-from typing import Any, Optional, Protocol, Sequence
-
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from typing import Any, Protocol
 
 # ======================================================================
 # Database abstraction
 # ======================================================================
+
 
 class TenantDatabase(Protocol):
     """
@@ -34,9 +33,7 @@ class TenantDatabase(Protocol):
         """Return all table names in the given schema."""
         ...
 
-    async def fetch_all_rows(
-        self, schema_name: str, table_name: str
-    ) -> list[dict[str, Any]]:
+    async def fetch_all_rows(self, schema_name: str, table_name: str) -> list[dict[str, Any]]:
         """Return every row in *table_name* as a list of dicts."""
         ...
 
@@ -44,6 +41,7 @@ class TenantDatabase(Protocol):
 # ======================================================================
 # Data exporter
 # ======================================================================
+
 
 @dataclass
 class ExportConfig:
@@ -66,7 +64,7 @@ class DataExporter:
     def __init__(
         self,
         db: TenantDatabase,
-        config: Optional[ExportConfig] = None,
+        config: ExportConfig | None = None,
     ) -> None:
         self._db = db
         self._config = config or ExportConfig()
@@ -75,7 +73,7 @@ class DataExporter:
         self,
         tenant_id: str,
         schema_name: str,
-        output_format: Optional[str] = None,
+        output_format: str | None = None,
     ) -> str:
         """
         Export all tables in *schema_name* and return the path to the
@@ -102,7 +100,7 @@ class DataExporter:
 
         tables = await self._db.list_tables(schema_name)
 
-        timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
         archive_name = f"export_{tenant_id}_{timestamp}.tar.gz"
         archive_path = os.path.join(self._config.export_directory, archive_name)
 
@@ -119,7 +117,7 @@ class DataExporter:
                 encoded = content.encode("utf-8")
                 info = tarfile.TarInfo(name=f"{tenant_id}/{filename}")
                 info.size = len(encoded)
-                info.mtime = int(datetime.now(timezone.utc).timestamp())
+                info.mtime = int(datetime.now(UTC).timestamp())
                 tar.addfile(info, io.BytesIO(encoded))
 
             # Include a manifest file.
@@ -135,7 +133,7 @@ class DataExporter:
             ).encode("utf-8")
             manifest_info = tarfile.TarInfo(name=f"{tenant_id}/manifest.json")
             manifest_info.size = len(manifest)
-            manifest_info.mtime = int(datetime.now(timezone.utc).timestamp())
+            manifest_info.mtime = int(datetime.now(UTC).timestamp())
             tar.addfile(manifest_info, io.BytesIO(manifest))
 
         return archive_path

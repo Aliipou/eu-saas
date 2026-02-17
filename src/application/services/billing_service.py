@@ -9,9 +9,9 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
-from typing import Any, Optional, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 from uuid import UUID, uuid4
 
 from domain.models.audit import AuditAction, AuditEntry
@@ -22,7 +22,9 @@ from domain.models.billing import (
     ResourceType,
     UsageRecord,
 )
-from domain.services.cost_calculator import CostCalculator
+
+if TYPE_CHECKING:
+    from domain.services.cost_calculator import CostCalculator
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +32,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Value objects returned by service methods
 # ---------------------------------------------------------------------------
+
 
 @dataclass(frozen=True)
 class CostBreakdown:
@@ -60,6 +63,7 @@ class CostProjection:
 # ---------------------------------------------------------------------------
 # Repository / infrastructure port interfaces
 # ---------------------------------------------------------------------------
+
 
 class UsageRepository(Protocol):
     """Port: persistence for usage records."""
@@ -111,7 +115,7 @@ class InvoiceRepository(Protocol):
         tenant_id: UUID,
         period_start: date,
         period_end: date,
-    ) -> Optional[Invoice]: ...
+    ) -> Invoice | None: ...
 
 
 class AnomalyRepository(Protocol):
@@ -131,7 +135,7 @@ class AnomalyRepository(Protocol):
 class AuditRepository(Protocol):
     """Port: tamper-evident audit entries."""
 
-    def get_latest_entry(self, tenant_id: UUID) -> Optional[AuditEntry]: ...
+    def get_latest_entry(self, tenant_id: UUID) -> AuditEntry | None: ...
 
     def save(self, entry: AuditEntry) -> AuditEntry: ...
 
@@ -139,6 +143,7 @@ class AuditRepository(Protocol):
 # ---------------------------------------------------------------------------
 # Service
 # ---------------------------------------------------------------------------
+
 
 class BillingService:
     """Orchestrates usage metering, cost calculation, and invoicing."""
@@ -165,7 +170,7 @@ class BillingService:
         self,
         tenant_id: UUID,
         action: AuditAction,
-        details: Optional[dict[str, Any]] = None,
+        details: dict[str, Any] | None = None,
     ) -> AuditEntry:
         latest = self._audit_repo.get_latest_entry(tenant_id)
         previous_hash = latest.entry_hash if latest else ""
@@ -175,7 +180,7 @@ class BillingService:
             action=action,
             actor_id=UUID(int=0),
             details=details or {},
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             previous_hash=previous_hash,
         )
         return self._audit_repo.save(entry)
@@ -196,7 +201,7 @@ class BillingService:
             resource_type=resource_type,
             quantity=quantity,
             unit=unit,
-            recorded_at=datetime.now(timezone.utc),
+            recorded_at=datetime.now(UTC),
         )
         return self._usage_repo.save(record)
 
@@ -215,9 +220,9 @@ class BillingService:
         # Aggregate quantities per resource type
         aggregated: dict[ResourceType, Decimal] = {}
         for rec in usage_records:
-            aggregated[rec.resource_type] = aggregated.get(
-                rec.resource_type, Decimal("0")
-            ) + rec.quantity
+            aggregated[rec.resource_type] = (
+                aggregated.get(rec.resource_type, Decimal("0")) + rec.quantity
+            )
 
         cost_records: list[CostRecord] = []
         for resource_type, total_quantity in aggregated.items():
@@ -274,15 +279,10 @@ class BillingService:
         days_in_month = calendar.monthrange(today.year, today.month)[1]
         days_elapsed = today.day
 
-        records = self._cost_repo.get_by_tenant_and_range(
-            tenant_id, month_start, today
-        )
+        records = self._cost_repo.get_by_tenant_and_range(tenant_id, month_start, today)
         actual = sum((r.total_cost for r in records), Decimal("0"))
 
-        if days_elapsed > 0:
-            projected = (actual / days_elapsed) * days_in_month
-        else:
-            projected = Decimal("0")
+        projected = actual / days_elapsed * days_in_month if days_elapsed > 0 else Decimal("0")
 
         return CostProjection(
             tenant_id=tenant_id,
@@ -301,9 +301,7 @@ class BillingService:
         period_end: date,
     ) -> Invoice:
         """Generate an invoice for the given billing period."""
-        records = self._cost_repo.get_by_tenant_and_range(
-            tenant_id, period_start, period_end
-        )
+        records = self._cost_repo.get_by_tenant_and_range(tenant_id, period_start, period_end)
 
         line_items: list[dict[str, Any]] = []
         total_amount = Decimal("0")
@@ -329,7 +327,7 @@ class BillingService:
             total_amount=total_amount.quantize(Decimal("0.01")),
             currency="EUR",
             status="DRAFT",
-            generated_at=datetime.now(timezone.utc),
+            generated_at=datetime.now(UTC),
         )
         invoice = self._invoice_repo.save(invoice)
 
@@ -354,9 +352,7 @@ class BillingService:
         today = date.today()
         window_start = today - timedelta(days=7)
 
-        cost_records = self._cost_repo.get_by_tenant_and_range(
-            tenant_id, window_start, today
-        )
+        cost_records = self._cost_repo.get_by_tenant_and_range(tenant_id, window_start, today)
 
         # Organise daily totals per resource type
         daily_totals: dict[ResourceType, dict[date, Decimal]] = {}

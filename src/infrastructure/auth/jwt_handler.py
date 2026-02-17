@@ -8,9 +8,9 @@ with tenant-aware claims for secure multi-tenant authentication.
 from __future__ import annotations
 
 import uuid
-from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
-from typing import Any, Optional
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from jose import JWTError, jwt
 
@@ -37,7 +37,7 @@ class JWTHandler:
         self,
         private_key: str,
         public_key: str,
-        config: Optional[JWTConfig] = None,
+        config: JWTConfig | None = None,
     ) -> None:
         self._private_key = private_key
         self._public_key = public_key
@@ -52,11 +52,11 @@ class JWTHandler:
         user_id: str,
         tenant_id: str,
         role: str,
-        extra_claims: Optional[dict[str, Any]] = None,
+        extra_claims: dict[str, Any] | None = None,
     ) -> str:
         """Create a short-lived access token carrying identity and role claims."""
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         expires = now + timedelta(minutes=self._config.access_token_expire_minutes)
 
         payload: dict[str, Any] = {
@@ -73,10 +73,12 @@ class JWTHandler:
         if extra_claims:
             payload.update(extra_claims)
 
-        return jwt.encode(
-            payload,
-            self._private_key,
-            algorithm=self._config.algorithm,
+        return str(
+            jwt.encode(
+                payload,
+                self._private_key,
+                algorithm=self._config.algorithm,
+            )
         )
 
     def create_refresh_token(
@@ -86,7 +88,7 @@ class JWTHandler:
     ) -> str:
         """Create a long-lived refresh token (minimal claims)."""
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         expires = now + timedelta(days=self._config.refresh_token_expire_days)
 
         payload: dict[str, Any] = {
@@ -99,10 +101,12 @@ class JWTHandler:
             "token_type": "refresh",
         }
 
-        return jwt.encode(
-            payload,
-            self._private_key,
-            algorithm=self._config.algorithm,
+        return str(
+            jwt.encode(
+                payload,
+                self._private_key,
+                algorithm=self._config.algorithm,
+            )
         )
 
     # ------------------------------------------------------------------

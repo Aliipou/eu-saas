@@ -9,15 +9,17 @@ Defines a permission model where each ``TenantRole`` is mapped to a set of
 from __future__ import annotations
 
 from enum import Enum, IntEnum
-from functools import wraps
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any
 
-from fastapi import Depends, HTTPException, Request, status
+from fastapi import HTTPException, Request, status
 
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 # ======================================================================
 # Permissions
 # ======================================================================
+
 
 class Permission(str, Enum):
     """Fine-grained permissions used throughout the platform."""
@@ -42,6 +44,7 @@ class Permission(str, Enum):
 # Roles  (ordered from least to most privileged)
 # ======================================================================
 
+
 class TenantRole(IntEnum):
     """
     Tenant-scoped roles ordered by privilege level.
@@ -64,9 +67,7 @@ _ALL_PERMISSIONS: set[Permission] = set(Permission)
 
 ROLE_PERMISSIONS: dict[TenantRole, set[Permission]] = {
     TenantRole.OWNER: _ALL_PERMISSIONS,
-
     TenantRole.ADMIN: _ALL_PERMISSIONS - {Permission.TENANT_ADMIN},
-
     TenantRole.MEMBER: {
         Permission.TENANT_READ,
         Permission.USER_READ,
@@ -75,7 +76,6 @@ ROLE_PERMISSIONS: dict[TenantRole, set[Permission]] = {
         Permission.GDPR_READ,
         Permission.AUDIT_READ,
     },
-
     TenantRole.VIEWER: {
         Permission.TENANT_READ,
         Permission.USER_READ,
@@ -89,6 +89,7 @@ ROLE_PERMISSIONS: dict[TenantRole, set[Permission]] = {
 # ======================================================================
 # Helper to extract the current user from the request
 # ======================================================================
+
 
 def _get_current_user(request: Request) -> dict[str, Any]:
     """
@@ -110,16 +111,17 @@ def _resolve_role(role_value: str) -> TenantRole:
     """Convert a role string (e.g. ``'ADMIN'``) to a ``TenantRole``."""
     try:
         return TenantRole[role_value.upper()]
-    except KeyError:
+    except KeyError as exc:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=f"Unknown role: {role_value}",
-        )
+        ) from exc
 
 
 # ======================================================================
 # FastAPI dependencies
 # ======================================================================
+
 
 def require_permission(permission: Permission) -> Callable[..., Any]:
     """

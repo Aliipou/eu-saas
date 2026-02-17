@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from domain.models.tenant import TenantStatus
 
-
 VALID_TRANSITIONS: dict[TenantStatus, list[TenantStatus]] = {
     TenantStatus.PENDING: [TenantStatus.PROVISIONING, TenantStatus.DELETED],
     TenantStatus.PROVISIONING: [TenantStatus.ACTIVE, TenantStatus.DELETED],

@@ -9,10 +9,9 @@ from __future__ import annotations
 
 import logging
 import secrets
-from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
-from typing import Any, Optional, Protocol
+from datetime import UTC, datetime, timedelta
+from typing import Any, Protocol
 from uuid import UUID, uuid4
 
 from argon2 import PasswordHasher
@@ -49,12 +48,13 @@ class TokenPair:
 # Repository / infrastructure port interfaces
 # ---------------------------------------------------------------------------
 
+
 class UserRepository(Protocol):
     """Port: persistence operations for :class:`User` aggregates."""
 
-    def get_by_id(self, user_id: UUID) -> Optional[User]: ...
+    def get_by_id(self, user_id: UUID) -> User | None: ...
 
-    def get_by_email(self, email: str) -> Optional[User]: ...
+    def get_by_email(self, email: str) -> User | None: ...
 
     def count_by_tenant(self, tenant_id: UUID) -> int: ...
 
@@ -66,7 +66,7 @@ class UserRepository(Protocol):
 class TenantRepository(Protocol):
     """Port: read-only tenant lookup for auth validations."""
 
-    def get_by_id(self, tenant_id: UUID) -> Optional[Tenant]: ...
+    def get_by_id(self, tenant_id: UUID) -> Tenant | None: ...
 
 
 class RefreshTokenStore(Protocol):
@@ -74,7 +74,7 @@ class RefreshTokenStore(Protocol):
 
     def store(self, token_id: str, user_id: UUID, expires_at: datetime) -> None: ...
 
-    def validate(self, token_id: str) -> Optional[UUID]: ...
+    def validate(self, token_id: str) -> UUID | None: ...
 
     def revoke(self, token_id: str) -> None: ...
 
@@ -82,7 +82,7 @@ class RefreshTokenStore(Protocol):
 class AuditRepository(Protocol):
     """Port: tamper-evident audit entries."""
 
-    def get_latest_entry(self, tenant_id: UUID) -> Optional[AuditEntry]: ...
+    def get_latest_entry(self, tenant_id: UUID) -> AuditEntry | None: ...
 
     def save(self, entry: AuditEntry) -> AuditEntry: ...
 
@@ -90,6 +90,7 @@ class AuditRepository(Protocol):
 # ---------------------------------------------------------------------------
 # Exceptions
 # ---------------------------------------------------------------------------
+
 
 class AuthenticationError(Exception):
     """Raised when credentials are invalid."""
@@ -118,6 +119,7 @@ class UserAlreadyExistsError(Exception):
 # ---------------------------------------------------------------------------
 # Service
 # ---------------------------------------------------------------------------
+
 
 class AuthService:
     """Handles registration, authentication, and JWT lifecycle."""
@@ -153,7 +155,7 @@ class AuthService:
             return False
 
     def _create_access_token(self, user: User) -> str:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         claims: dict[str, Any] = {
             "sub": str(user.id),
             "tenant_id": str(user.tenant_id),
@@ -164,11 +166,11 @@ class AuthService:
             "exp": now + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
             "jti": uuid4().hex,
         }
-        return jwt.encode(claims, self._private_key, algorithm=JWT_ALGORITHM)
+        return str(jwt.encode(claims, self._private_key, algorithm=JWT_ALGORITHM))
 
     def _create_refresh_token(self, user: User) -> str:
         token_id = secrets.token_urlsafe(48)
-        expires_at = datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+        expires_at = datetime.now(UTC) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
         self._refresh_store.store(
             token_id=token_id,
             user_id=user.id,
@@ -187,7 +189,7 @@ class AuthService:
         tenant_id: UUID,
         action: AuditAction,
         actor_id: UUID,
-        details: Optional[dict[str, Any]] = None,
+        details: dict[str, Any] | None = None,
     ) -> AuditEntry:
         latest = self._audit_repo.get_latest_entry(tenant_id)
         previous_hash = latest.entry_hash if latest else ""
@@ -197,7 +199,7 @@ class AuthService:
             action=action,
             actor_id=actor_id,
             details=details or {},
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             previous_hash=previous_hash,
         )
         return self._audit_repo.save(entry)
@@ -241,7 +243,7 @@ class AuthService:
             full_name=full_name,
             role=role,
             is_active=True,
-            created_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
         )
         user = self._user_repo.save(user)
         logger.info("User %s registered in tenant %s with role %s", user.id, tenant_id, role.value)
@@ -267,7 +269,7 @@ class AuthService:
             raise AuthenticationError()
 
         # Update last login
-        user.last_login = datetime.now(timezone.utc)
+        user.last_login = datetime.now(UTC)
         self._user_repo.update(user)
 
         token_pair = self._issue_token_pair(user)
@@ -311,7 +313,7 @@ class AuthService:
         except JWTError as exc:
             raise InvalidTokenError(detail=str(exc)) from exc
 
-        user_id_str: Optional[str] = payload.get("sub")
+        user_id_str: str | None = payload.get("sub")
         if user_id_str is None:
             raise InvalidTokenError(detail="Token missing 'sub' claim")
 

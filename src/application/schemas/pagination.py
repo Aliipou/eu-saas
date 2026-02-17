@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
-from typing import Generic, List, TypeVar
+from typing import TypeVar
 
 T = TypeVar("T")
 
@@ -40,10 +40,10 @@ class PaginationParams:
 
 
 @dataclass
-class PaginatedResponse(Generic[T]):
+class PaginatedResponse[T]:
     """Generic wrapper returned by paginated list operations."""
 
-    items: List[T] = field(default_factory=list)
+    items: list[T] = field(default_factory=list)
     total: int = 0
     page: int = 1
     size: int = _DEFAULT_SIZE

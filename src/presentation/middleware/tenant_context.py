@@ -9,10 +9,10 @@ available through ``request.state`` and a FastAPI dependency.
 from __future__ import annotations
 
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
-from fastapi import Depends, HTTPException, Request, status
+from fastapi import HTTPException, Request, status
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.responses import JSONResponse, Response
 
@@ -34,6 +34,7 @@ PUBLIC_PATH_PREFIXES: tuple[str, ...] = (
 # ---------------------------------------------------------------------------
 # TenantContext value object
 # ---------------------------------------------------------------------------
+
 
 @dataclass(frozen=True, slots=True)
 class TenantContext:
@@ -59,6 +60,7 @@ class TenantContext:
 # Middleware
 # ---------------------------------------------------------------------------
 
+
 class TenantContextMiddleware(BaseHTTPMiddleware):
     """Starlette middleware that resolves the tenant for every non-public
     request and attaches a :class:`TenantContext` to ``request.state``.
@@ -72,9 +74,7 @@ class TenantContextMiddleware(BaseHTTPMiddleware):
     ``403`` / ``404`` JSON error is returned immediately.
     """
 
-    async def dispatch(
-        self, request: Request, call_next: RequestResponseEndpoint
-    ) -> Response:
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         # Skip public / documentation routes
         if self._is_public(request.url.path):
             request.state.tenant_context = None
@@ -140,9 +140,7 @@ class TenantContextMiddleware(BaseHTTPMiddleware):
     def _extract_tenant_id(request: Request) -> str | None:
         """Return the tenant id string from JWT claims or header."""
         # 1. JWT claims (populated by an upstream auth middleware / dependency)
-        jwt_claims: dict[str, Any] | None = getattr(
-            request.state, "jwt_claims", None
-        )
+        jwt_claims: dict[str, Any] | None = getattr(request.state, "jwt_claims", None)
         if jwt_claims and "tenant_id" in jwt_claims:
             return str(jwt_claims["tenant_id"])
 
@@ -168,7 +166,7 @@ class TenantContextMiddleware(BaseHTTPMiddleware):
         """
         repo = getattr(request.app.state, "tenant_repository", None)
         if repo is not None:
-            return await repo.get_by_id(tenant_id)
+            return await repo.get_by_id(tenant_id)  # type: ignore[no-any-return]
 
         # Fallback: accept any well-formed UUID and assume ACTIVE.  Remove
         # this branch once the real repository is wired up.
@@ -210,6 +208,7 @@ class TenantContextMiddleware(BaseHTTPMiddleware):
 # ---------------------------------------------------------------------------
 # FastAPI dependency
 # ---------------------------------------------------------------------------
+
 
 async def get_current_tenant(request: Request) -> TenantContext:
     """FastAPI dependency that returns the :class:`TenantContext` set by

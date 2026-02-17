@@ -8,21 +8,22 @@ across all tenants.
 
 from __future__ import annotations
 
-import asyncio
 import concurrent.futures
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import TYPE_CHECKING
 
 from alembic import command as alembic_command
 from alembic.config import Config as AlembicConfig
 from alembic.runtime.migration import MigrationContext
 from alembic.script import ScriptDirectory
 from sqlalchemy import text
-from sqlalchemy.engine import Engine
 
 from .tenant_schema_manager import TenantSchemaManager
+
+if TYPE_CHECKING:
+    from sqlalchemy.engine import Engine
 
 logger = logging.getLogger(__name__)
 
@@ -41,8 +42,8 @@ class MigrationStatus:
 
     tenant_slug: str
     schema_name: str
-    current_revision: Optional[str]
-    head_revision: Optional[str]
+    current_revision: str | None
+    head_revision: str | None
     is_up_to_date: bool
 
 
@@ -64,8 +65,8 @@ class TenantMigrationRunner:
     def __init__(
         self,
         engine: Engine,
-        alembic_cfg_path: Optional[str] = None,
-        script_location: Optional[str] = None,
+        alembic_cfg_path: str | None = None,
+        script_location: str | None = None,
     ) -> None:
         self._engine = engine
         self._alembic_cfg_path = alembic_cfg_path or str(_DEFAULT_ALEMBIC_INI)
@@ -161,9 +162,7 @@ class TenantMigrationRunner:
             ``"-1"`` for one step back).
         """
         schema = _tenant_schema_name(tenant_slug)
-        logger.info(
-            "Rolling back schema %s to revision %s", schema, revision
-        )
+        logger.info("Rolling back schema %s to revision %s", schema, revision)
 
         cfg = self._make_alembic_config(schema)
 
@@ -207,7 +206,7 @@ class TenantMigrationRunner:
             is_up_to_date=(current_rev == head_rev),
         )
 
-    def run_all_tenants(self, batch_size: int = 10) -> Dict[str, str]:
+    def run_all_tenants(self, batch_size: int = 10) -> dict[str, str]:
         """Run pending migrations across **all** tenant schemas in parallel.
 
         Parameters
@@ -225,7 +224,7 @@ class TenantMigrationRunner:
             logger.info("No tenant schemas found; nothing to migrate.")
             return {}
 
-        results: Dict[str, str] = {}
+        results: dict[str, str] = {}
 
         def _migrate_one(schema_name: str) -> tuple[str, str]:
             # Derive slug back from schema name ("tenant_foo_bar" -> "foo_bar")
@@ -234,17 +233,11 @@ class TenantMigrationRunner:
                 self.run_migrations(slug)
                 return schema_name, "ok"
             except Exception as exc:
-                logger.error(
-                    "Migration failed for %s: %s", schema_name, exc
-                )
+                logger.error("Migration failed for %s: %s", schema_name, exc)
                 return schema_name, str(exc)
 
-        with concurrent.futures.ThreadPoolExecutor(
-            max_workers=batch_size
-        ) as executor:
-            futures = {
-                executor.submit(_migrate_one, s): s for s in schemas
-            }
+        with concurrent.futures.ThreadPoolExecutor(max_workers=batch_size) as executor:
+            futures = {executor.submit(_migrate_one, s): s for s in schemas}
             for future in concurrent.futures.as_completed(futures):
                 schema_name, status = future.result()
                 results[schema_name] = status

@@ -8,15 +8,18 @@ hard-delete (irreversible removal after the grace period expires).
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from enum import Enum
-from typing import Any, Optional, Protocol, Sequence
+from typing import TYPE_CHECKING, Protocol
 
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 # ======================================================================
 # Data categories
 # ======================================================================
+
 
 class DataCategory(str, Enum):
     TRANSACTIONAL = "transactional"
@@ -28,6 +31,7 @@ class DataCategory(str, Enum):
 # ======================================================================
 # Retention policy
 # ======================================================================
+
 
 @dataclass(frozen=True)
 class RetentionPolicy:
@@ -62,6 +66,7 @@ DEFAULT_POLICY = RetentionPolicy()
 # Expired-record reference
 # ======================================================================
 
+
 @dataclass(frozen=True)
 class ExpiredRecord:
     """Pointer to a single record that has exceeded its retention limit."""
@@ -73,12 +78,13 @@ class ExpiredRecord:
     created_at: datetime
     expired_at: datetime
     soft_deleted: bool = False
-    soft_deleted_at: Optional[datetime] = None
+    soft_deleted_at: datetime | None = None
 
 
 # ======================================================================
 # Database abstraction
 # ======================================================================
+
 
 class RetentionDatabase(Protocol):
     """Interface the retention engine uses to interact with storage."""
@@ -88,8 +94,7 @@ class RetentionDatabase(Protocol):
         tenant_id: str,
         category: DataCategory,
         cutoff: datetime,
-    ) -> list[ExpiredRecord]:
-        ...
+    ) -> list[ExpiredRecord]: ...
 
     async def soft_delete(self, records: Sequence[ExpiredRecord]) -> int:
         """Mark records as soft-deleted. Return count of affected rows."""
@@ -103,6 +108,7 @@ class RetentionDatabase(Protocol):
 # ======================================================================
 # Retention engine
 # ======================================================================
+
 
 class RetentionEngine:
     """
@@ -123,21 +129,19 @@ class RetentionEngine:
     async def scan_expired_records(
         self,
         tenant_id: str,
-        policy: Optional[RetentionPolicy] = None,
+        policy: RetentionPolicy | None = None,
     ) -> list[ExpiredRecord]:
         """
         Return all records for *tenant_id* whose retention limit has passed.
         """
 
         policy = policy or DEFAULT_POLICY
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         all_expired: list[ExpiredRecord] = []
 
         for category in DataCategory:
             cutoff = now - timedelta(days=policy.days_for(category))
-            records = await self._db.find_expired_records(
-                tenant_id, category, cutoff
-            )
+            records = await self._db.find_expired_records(tenant_id, category, cutoff)
             all_expired.extend(records)
 
         return all_expired
@@ -160,7 +164,7 @@ class RetentionEngine:
     async def hard_delete_records(
         self,
         records: Sequence[ExpiredRecord],
-        policy: Optional[RetentionPolicy] = None,
+        policy: RetentionPolicy | None = None,
     ) -> int:
         """
         Hard-delete records whose grace period has elapsed.
@@ -170,7 +174,7 @@ class RetentionEngine:
         """
 
         policy = policy or DEFAULT_POLICY
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         grace = timedelta(days=policy.grace_period_days)
 
         eligible = [

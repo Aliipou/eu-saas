@@ -4,19 +4,15 @@ from __future__ import annotations
 
 import calendar
 import uuid
-from datetime import date, datetime, timezone
-from decimal import Decimal
-from typing import Annotated
+from datetime import date
+from typing import TYPE_CHECKING, Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 
 from infrastructure.container import get_billing_service
-from application.services.billing_service import BillingService
 
-from ...middleware.tenant_context import TenantContext, get_current_tenant
 from .schemas import (
     AnomalyListResponse,
-    AnomalyResponse,
     CostBreakdown,
     CostLineItem,
     CostProjection,
@@ -25,6 +21,9 @@ from .schemas import (
     InvoiceResponse,
     PaginationMeta,
 )
+
+if TYPE_CHECKING:
+    from application.services.billing_service import BillingService
 
 router = APIRouter(prefix="/tenants/{tenant_id}", tags=["Billing & Costs"])
 

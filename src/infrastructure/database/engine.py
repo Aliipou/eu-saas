@@ -7,11 +7,10 @@ dependency helpers that yield properly-scoped database sessions.
 
 from __future__ import annotations
 
-import contextlib
-from typing import AsyncGenerator, Generator, Optional
+from typing import TYPE_CHECKING
 
-from sqlalchemy import create_engine as sa_create_engine, event, text
-from sqlalchemy.engine import Engine
+from sqlalchemy import create_engine as sa_create_engine
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -28,12 +27,17 @@ from .config import (
     get_default_settings,
 )
 
+if TYPE_CHECKING:
+    from collections.abc import AsyncGenerator, Generator
+
+    from sqlalchemy.engine import Engine
 
 # ---------------------------------------------------------------------------
 # Engine factories
 # ---------------------------------------------------------------------------
 
-def build_sync_engine(settings: Optional[DatabaseSettings] = None) -> Engine:
+
+def build_sync_engine(settings: DatabaseSettings | None = None) -> Engine:
     """Create a synchronous SQLAlchemy :class:`Engine` with QueuePool.
 
     Parameters
@@ -54,7 +58,7 @@ def build_sync_engine(settings: Optional[DatabaseSettings] = None) -> Engine:
     return engine
 
 
-def build_async_engine(settings: Optional[DatabaseSettings] = None) -> AsyncEngine:
+def build_async_engine(settings: DatabaseSettings | None = None) -> AsyncEngine:
     """Create an asynchronous SQLAlchemy :class:`AsyncEngine`.
 
     Parameters
@@ -78,13 +82,13 @@ def build_async_engine(settings: Optional[DatabaseSettings] = None) -> AsyncEngi
 # Module-level singletons (lazily initialised on first import)
 # ---------------------------------------------------------------------------
 
-_sync_engine: Optional[Engine] = None
-_async_engine: Optional[AsyncEngine] = None
-_SyncSessionFactory: Optional[sessionmaker] = None
-_AsyncSessionFactory: Optional[async_sessionmaker] = None
+_sync_engine: Engine | None = None
+_async_engine: AsyncEngine | None = None
+_SyncSessionFactory: sessionmaker | None = None
+_AsyncSessionFactory: async_sessionmaker | None = None
 
 
-def get_sync_engine(settings: Optional[DatabaseSettings] = None) -> Engine:
+def get_sync_engine(settings: DatabaseSettings | None = None) -> Engine:
     """Return (or create) the module-level synchronous engine."""
     global _sync_engine
     if _sync_engine is None:
@@ -92,7 +96,7 @@ def get_sync_engine(settings: Optional[DatabaseSettings] = None) -> Engine:
     return _sync_engine
 
 
-def get_async_engine(settings: Optional[DatabaseSettings] = None) -> AsyncEngine:
+def get_async_engine(settings: DatabaseSettings | None = None) -> AsyncEngine:
     """Return (or create) the module-level asynchronous engine."""
     global _async_engine
     if _async_engine is None:
@@ -124,6 +128,7 @@ def _async_session_factory() -> async_sessionmaker:
 # ---------------------------------------------------------------------------
 # Session dependency helpers (for FastAPI / DI frameworks)
 # ---------------------------------------------------------------------------
+
 
 def get_session() -> Generator[Session, None, None]:
     """Yield a synchronous :class:`Session` and ensure it is closed.
@@ -166,6 +171,7 @@ async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
 # ---------------------------------------------------------------------------
 # Tenant-aware session helpers
 # ---------------------------------------------------------------------------
+
 
 def _tenant_schema_name(tenant_id: str) -> str:
     """Derive the PostgreSQL schema name from a tenant identifier.
@@ -227,6 +233,7 @@ async def get_async_tenant_session(
 # ---------------------------------------------------------------------------
 # Cleanup helpers
 # ---------------------------------------------------------------------------
+
 
 async def dispose_engines() -> None:
     """Dispose both engines, closing all pooled connections.

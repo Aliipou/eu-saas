@@ -10,14 +10,16 @@ from __future__ import annotations
 import enum
 import logging
 from dataclasses import dataclass, field
-from datetime import date, datetime, timedelta, timezone
-from typing import Any, Optional, Protocol
+from datetime import UTC, date, datetime, timedelta
+from typing import TYPE_CHECKING, Any, Protocol
 from uuid import UUID, uuid4
 
 from domain.exceptions import TenantNotFoundError
 from domain.models.audit import AuditAction, AuditEntry
 from domain.models.tenant import Tenant, TenantStatus
-from domain.services.tenant_lifecycle import TenantLifecycleService
+
+if TYPE_CHECKING:
+    from domain.services.tenant_lifecycle import TenantLifecycleService
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +27,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Value objects
 # ---------------------------------------------------------------------------
+
 
 class ExportJobStatus(enum.Enum):
     QUEUED = "QUEUED"
@@ -40,10 +43,10 @@ class ExportStatus:
     job_id: str
     tenant_id: UUID
     status: ExportJobStatus
-    download_url: Optional[str] = None
-    error: Optional[str] = None
-    created_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
+    download_url: str | None = None
+    error: str | None = None
+    created_at: datetime | None = None
+    completed_at: datetime | None = None
 
 
 @dataclass(frozen=True)
@@ -54,8 +57,8 @@ class ErasureResult:
     schemas_dropped: list[str] = field(default_factory=list)
     records_deleted: int = 0
     caches_purged: bool = False
-    audit_entry_id: Optional[UUID] = None
-    completed_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    audit_entry_id: UUID | None = None
+    completed_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 @dataclass
@@ -66,7 +69,7 @@ class RetentionPolicy:
     retention_days: int = 365
     grace_period_days: int = 30
     auto_cleanup_enabled: bool = True
-    updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 @dataclass(frozen=True)
@@ -76,17 +79,18 @@ class CleanupResult:
     tenant_id: UUID
     records_soft_deleted: int = 0
     records_hard_deleted: int = 0
-    scan_completed_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    scan_completed_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 # ---------------------------------------------------------------------------
 # Repository / infrastructure port interfaces
 # ---------------------------------------------------------------------------
 
+
 class TenantRepository(Protocol):
     """Port: tenant persistence."""
 
-    def get_by_id(self, tenant_id: UUID) -> Optional[Tenant]: ...
+    def get_by_id(self, tenant_id: UUID) -> Tenant | None: ...
 
     def update(self, tenant: Tenant) -> Tenant: ...
 
@@ -96,21 +100,21 @@ class ExportJobRepository(Protocol):
 
     def save(self, job_id: str, tenant_id: UUID, status: ExportJobStatus) -> None: ...
 
-    def get_status(self, job_id: str) -> Optional[ExportStatus]: ...
+    def get_status(self, job_id: str) -> ExportStatus | None: ...
 
     def update_status(
         self,
         job_id: str,
         status: ExportJobStatus,
-        download_url: Optional[str] = None,
-        error: Optional[str] = None,
+        download_url: str | None = None,
+        error: str | None = None,
     ) -> None: ...
 
 
 class RetentionRepository(Protocol):
     """Port: retention-policy persistence and record scanning."""
 
-    def get_policy(self, tenant_id: UUID) -> Optional[RetentionPolicy]: ...
+    def get_policy(self, tenant_id: UUID) -> RetentionPolicy | None: ...
 
     def save_policy(self, policy: RetentionPolicy) -> RetentionPolicy: ...
 
@@ -152,7 +156,7 @@ class TenantDataRepository(Protocol):
 class AuditRepository(Protocol):
     """Port: tamper-evident audit entries."""
 
-    def get_latest_entry(self, tenant_id: UUID) -> Optional[AuditEntry]: ...
+    def get_latest_entry(self, tenant_id: UUID) -> AuditEntry | None: ...
 
     def save(self, entry: AuditEntry) -> AuditEntry: ...
 
@@ -160,6 +164,7 @@ class AuditRepository(Protocol):
 # ---------------------------------------------------------------------------
 # Service
 # ---------------------------------------------------------------------------
+
 
 class GDPRService:
     """Implements GDPR data-portability, erasure, and retention management."""
@@ -196,7 +201,7 @@ class GDPRService:
         self,
         tenant_id: UUID,
         action: AuditAction,
-        details: Optional[dict[str, Any]] = None,
+        details: dict[str, Any] | None = None,
     ) -> AuditEntry:
         latest = self._audit_repo.get_latest_entry(tenant_id)
         previous_hash = latest.entry_hash if latest else ""
@@ -206,7 +211,7 @@ class GDPRService:
             action=action,
             actor_id=UUID(int=0),
             details=details or {},
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             previous_hash=previous_hash,
         )
         return self._audit_repo.save(entry)
@@ -262,14 +267,12 @@ class GDPRService:
 
         # 1. Freeze tenant -- suspend if currently active
         if tenant.status == TenantStatus.ACTIVE:
-            if not self._lifecycle.validate_transition(
-                tenant.status, TenantStatus.SUSPENDED
-            ):
+            if not self._lifecycle.validate_transition(tenant.status, TenantStatus.SUSPENDED):
                 raise ValueError(
                     f"Cannot suspend tenant {tenant_id} from state {tenant.status.value}"
                 )
             tenant.status = TenantStatus.SUSPENDED
-            tenant.updated_at = datetime.now(timezone.utc)
+            tenant.updated_at = datetime.now(UTC)
             tenant = self._tenant_repo.update(tenant)
 
         # 2. Export final archive (synchronous – for erasure we wait)
@@ -303,18 +306,14 @@ class GDPRService:
         )
 
         # 7. Transition to DELETED via DEPROVISIONING
-        if self._lifecycle.validate_transition(
-            tenant.status, TenantStatus.DEPROVISIONING
-        ):
+        if self._lifecycle.validate_transition(tenant.status, TenantStatus.DEPROVISIONING):
             tenant.status = TenantStatus.DEPROVISIONING
-            tenant.updated_at = datetime.now(timezone.utc)
+            tenant.updated_at = datetime.now(UTC)
             tenant = self._tenant_repo.update(tenant)
 
-        if self._lifecycle.validate_transition(
-            tenant.status, TenantStatus.DELETED
-        ):
+        if self._lifecycle.validate_transition(tenant.status, TenantStatus.DELETED):
             tenant.status = TenantStatus.DELETED
-            tenant.updated_at = datetime.now(timezone.utc)
+            tenant.updated_at = datetime.now(UTC)
             tenant = self._tenant_repo.update(tenant)
 
         logger.info("Erasure completed for tenant %s", tenant_id)
@@ -345,7 +344,7 @@ class GDPRService:
     ) -> RetentionPolicy:
         """Create or update the retention policy for a tenant."""
         self._get_tenant_or_raise(tenant_id)
-        policy.updated_at = datetime.now(timezone.utc)
+        policy.updated_at = datetime.now(UTC)
         saved = self._retention_repo.save_policy(policy)
 
         self._create_audit_entry(
@@ -372,22 +371,16 @@ class GDPRService:
 
         today = date.today()
         retention_threshold = today - timedelta(days=policy.retention_days)
-        grace_threshold = today - timedelta(
-            days=policy.retention_days + policy.grace_period_days
-        )
+        grace_threshold = today - timedelta(days=policy.retention_days + policy.grace_period_days)
 
         # Soft-delete records past retention threshold
-        expired_ids = self._retention_repo.find_expired_records(
-            tenant_id, retention_threshold
-        )
+        expired_ids = self._retention_repo.find_expired_records(tenant_id, retention_threshold)
         soft_deleted = 0
         if expired_ids:
             soft_deleted = self._retention_repo.soft_delete_records(expired_ids)
 
         # Hard-delete records past grace period
-        grace_ids = self._retention_repo.find_soft_deleted_past_grace(
-            tenant_id, grace_threshold
-        )
+        grace_ids = self._retention_repo.find_soft_deleted_past_grace(tenant_id, grace_threshold)
         hard_deleted = 0
         if grace_ids:
             hard_deleted = self._retention_repo.hard_delete_records(grace_ids)

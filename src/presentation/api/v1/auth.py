@@ -3,13 +3,12 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
-from typing import Annotated
+from typing import TYPE_CHECKING
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 
+from application.services.auth_service import AuthenticationError, AuthService, InvalidTokenError
 from infrastructure.container import get_auth_service
-from application.services.auth_service import AuthService, AuthenticationError, InvalidTokenError
 
 from .schemas import (
     ErrorResponse,
@@ -19,10 +18,13 @@ from .schemas import (
     UserResponse,
 )
 
+if TYPE_CHECKING:
+    from domain.models.user import User
+
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 
-def _user_to_response(user: object) -> UserResponse:
+def _user_to_response(user: User) -> UserResponse:
     return UserResponse(
         id=user.id,
         tenant_id=user.tenant_id,
@@ -89,7 +91,7 @@ async def login(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=exc.detail,
-        )
+        ) from exc
     return TokenResponse(
         access_token=token_pair.access_token,
         refresh_token=token_pair.refresh_token,
@@ -124,7 +126,7 @@ async def refresh_token(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=exc.detail,
-        )
+        ) from exc
     return TokenResponse(
         access_token=token_pair.access_token,
         refresh_token=token_pair.refresh_token,
@@ -137,13 +139,10 @@ async def refresh_token(
     "/logout",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Log out (invalidate refresh token)",
-    responses={
-        204: {"description": "Refresh token invalidated."},
-        401: {"description": "Not authenticated.", "model": ErrorResponse},
-    },
+    response_class=Response,
 )
-async def logout(request: Request) -> None:
-    return None
+async def logout(request: Request) -> Response:
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get(
@@ -174,5 +173,5 @@ async def me(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=exc.detail,
             headers={"WWW-Authenticate": "Bearer"},
-        )
+        ) from exc
     return _user_to_response(user)

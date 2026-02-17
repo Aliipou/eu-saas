@@ -17,9 +17,8 @@ from __future__ import annotations
 
 import enum
 import uuid
-from datetime import date, datetime
 from decimal import Decimal
-from typing import List, Optional
+from typing import TYPE_CHECKING
 
 from sqlalchemy import (
     Boolean,
@@ -44,19 +43,24 @@ from sqlalchemy.orm import (
     relationship,
 )
 
+if TYPE_CHECKING:
+    from datetime import date, datetime
 
 # ---------------------------------------------------------------------------
 # Base class
 # ---------------------------------------------------------------------------
 
-class Base(DeclarativeBase):
+
+class Base(DeclarativeBase):  # type: ignore[misc]
     """Shared declarative base for every ORM model."""
+
     pass
 
 
 # ---------------------------------------------------------------------------
 # Enumerations
 # ---------------------------------------------------------------------------
+
 
 class TenantStatus(str, enum.Enum):
     ACTIVE = "active"
@@ -103,6 +107,7 @@ class AuditAction(str, enum.Enum):
 # PUBLIC SCHEMA -- TenantModel
 # ---------------------------------------------------------------------------
 
+
 class TenantModel(Base):
     """Represents a tenant (organisation) registered on the platform.
 
@@ -135,17 +140,13 @@ class TenantModel(Base):
         nullable=False,
         default=TenantTier.FREE,
     )
-    domain: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    metadata_json: Mapped[Optional[dict]] = mapped_column(
-        JSONB, nullable=True, default=None
-    )
+    domain: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    metadata_json: Mapped[dict | None] = mapped_column(JSONB, nullable=True, default=None)
     data_residency_region: Mapped[str] = mapped_column(
         String(10), nullable=False, default="eu-west-1"
     )
     max_users: Mapped[int] = mapped_column(Integer, nullable=False, default=50)
-    is_gdpr_compliant: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=True
-    )
+    is_gdpr_compliant: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -159,9 +160,7 @@ class TenantModel(Base):
     )
 
     # Back-references (only useful inside public-schema queries)
-    audit_logs: Mapped[List["AuditLogModel"]] = relationship(
-        back_populates="tenant", lazy="selectin"
-    )
+    audit_logs: Mapped[list[AuditLogModel]] = relationship(back_populates="tenant", lazy="selectin")
 
     def __repr__(self) -> str:
         return f"<Tenant(id={self.id!r}, slug={self.slug!r}, status={self.status!r})>"
@@ -170,6 +169,7 @@ class TenantModel(Base):
 # ---------------------------------------------------------------------------
 # TENANT SCHEMA -- UserModel
 # ---------------------------------------------------------------------------
+
 
 class UserModel(Base):
     """A user belonging to a specific tenant.
@@ -191,9 +191,7 @@ class UserModel(Base):
         default=uuid.uuid4,
         server_default=text("gen_random_uuid()"),
     )
-    tenant_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), nullable=False
-    )
+    tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     email: Mapped[str] = mapped_column(String(320), nullable=False)
     display_name: Mapped[str] = mapped_column(String(255), nullable=False)
     hashed_password: Mapped[str] = mapped_column(Text, nullable=False)
@@ -202,12 +200,8 @@ class UserModel(Base):
         nullable=False,
         default=UserRole.MEMBER,
     )
-    is_active: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=True
-    )
-    last_login_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -221,7 +215,7 @@ class UserModel(Base):
     )
 
     # Relationships within the tenant schema
-    usage_records: Mapped[List["UsageRecordModel"]] = relationship(
+    usage_records: Mapped[list[UsageRecordModel]] = relationship(
         back_populates="user", lazy="selectin"
     )
 
@@ -232,6 +226,7 @@ class UserModel(Base):
 # ---------------------------------------------------------------------------
 # TENANT SCHEMA -- UsageRecordModel
 # ---------------------------------------------------------------------------
+
 
 class UsageRecordModel(Base):
     """Tracks individual resource-usage events for billing purposes."""
@@ -254,31 +249,23 @@ class UsageRecordModel(Base):
         default=uuid.uuid4,
         server_default=text("gen_random_uuid()"),
     )
-    tenant_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), nullable=False
-    )
+    tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
     )
     resource_type: Mapped[str] = mapped_column(String(100), nullable=False)
-    quantity: Mapped[Decimal] = mapped_column(
-        Numeric(18, 6), nullable=False
-    )
+    quantity: Mapped[Decimal] = mapped_column(Numeric(18, 6), nullable=False)
     unit: Mapped[str] = mapped_column(String(50), nullable=False)
-    metadata_json: Mapped[Optional[dict]] = mapped_column(
-        JSONB, nullable=True
-    )
+    metadata_json: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     recorded_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
     )
 
-    user: Mapped[Optional["UserModel"]] = relationship(
-        back_populates="usage_records"
-    )
+    user: Mapped[UserModel | None] = relationship(back_populates="usage_records")
 
     def __repr__(self) -> str:
         return (
@@ -290,6 +277,7 @@ class UsageRecordModel(Base):
 # ---------------------------------------------------------------------------
 # TENANT SCHEMA -- CostRecordModel
 # ---------------------------------------------------------------------------
+
 
 class CostRecordModel(Base):
     """Aggregated cost line-items derived from usage records."""
@@ -304,9 +292,7 @@ class CostRecordModel(Base):
             "period_start",
             "period_end",
         ),
-        CheckConstraint(
-            "amount >= 0", name="ck_cost_records_amount_non_negative"
-        ),
+        CheckConstraint("amount >= 0", name="ck_cost_records_amount_non_negative"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -315,35 +301,25 @@ class CostRecordModel(Base):
         default=uuid.uuid4,
         server_default=text("gen_random_uuid()"),
     )
-    tenant_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), nullable=False
-    )
+    tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     resource_type: Mapped[str] = mapped_column(String(100), nullable=False)
-    amount: Mapped[Decimal] = mapped_column(
-        Numeric(18, 4), nullable=False
-    )
-    currency: Mapped[str] = mapped_column(
-        String(3), nullable=False, default="EUR"
-    )
+    amount: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False)
+    currency: Mapped[str] = mapped_column(String(3), nullable=False, default="EUR")
     period_start: Mapped[date] = mapped_column(nullable=False)
     period_end: Mapped[date] = mapped_column(nullable=False)
-    invoice_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    invoice_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("invoices.id", ondelete="SET NULL"),
         nullable=True,
     )
-    metadata_json: Mapped[Optional[dict]] = mapped_column(
-        JSONB, nullable=True
-    )
+    metadata_json: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
     )
 
-    invoice: Mapped[Optional["InvoiceModel"]] = relationship(
-        back_populates="cost_records"
-    )
+    invoice: Mapped[InvoiceModel | None] = relationship(back_populates="cost_records")
 
     def __repr__(self) -> str:
         return (
@@ -356,14 +332,13 @@ class CostRecordModel(Base):
 # TENANT SCHEMA -- InvoiceModel
 # ---------------------------------------------------------------------------
 
+
 class InvoiceModel(Base):
     """Monthly invoice issued to a tenant."""
 
     __tablename__ = "invoices"
     __table_args__ = (
-        UniqueConstraint(
-            "invoice_number", name="uq_invoices_invoice_number"
-        ),
+        UniqueConstraint("invoice_number", name="uq_invoices_invoice_number"),
         Index("ix_invoices_tenant_id", "tenant_id"),
         Index("ix_invoices_status", "status"),
         Index("ix_invoices_issued_at", "issued_at"),
@@ -379,12 +354,8 @@ class InvoiceModel(Base):
         default=uuid.uuid4,
         server_default=text("gen_random_uuid()"),
     )
-    tenant_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), nullable=False
-    )
-    invoice_number: Mapped[str] = mapped_column(
-        String(50), nullable=False
-    )
+    tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    invoice_number: Mapped[str] = mapped_column(String(50), nullable=False)
     status: Mapped[InvoiceStatus] = mapped_column(
         Enum(InvoiceStatus, name="invoice_status", create_constraint=False),
         nullable=False,
@@ -393,20 +364,12 @@ class InvoiceModel(Base):
     total_amount: Mapped[Decimal] = mapped_column(
         Numeric(18, 4), nullable=False, default=Decimal("0.0000")
     )
-    currency: Mapped[str] = mapped_column(
-        String(3), nullable=False, default="EUR"
-    )
+    currency: Mapped[str] = mapped_column(String(3), nullable=False, default="EUR")
     period_start: Mapped[date] = mapped_column(nullable=False)
     period_end: Mapped[date] = mapped_column(nullable=False)
-    issued_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    paid_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    metadata_json: Mapped[Optional[dict]] = mapped_column(
-        JSONB, nullable=True
-    )
+    issued_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    metadata_json: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -419,20 +382,20 @@ class InvoiceModel(Base):
         onupdate=func.now(),
     )
 
-    cost_records: Mapped[List["CostRecordModel"]] = relationship(
+    cost_records: Mapped[list[CostRecordModel]] = relationship(
         back_populates="invoice", lazy="selectin"
     )
 
     def __repr__(self) -> str:
         return (
-            f"<Invoice(id={self.id!r}, number={self.invoice_number!r}, "
-            f"status={self.status!r})>"
+            f"<Invoice(id={self.id!r}, number={self.invoice_number!r}, " f"status={self.status!r})>"
         )
 
 
 # ---------------------------------------------------------------------------
 # PUBLIC SCHEMA -- AuditLogModel  (shared, append-only)
 # ---------------------------------------------------------------------------
+
 
 class AuditLogModel(Base):
     """Append-only, tamper-evident audit log stored in the public schema.
@@ -467,39 +430,26 @@ class AuditLogModel(Base):
         ForeignKey("public.tenants.id", ondelete="CASCADE"),
         nullable=False,
     )
-    actor_id: Mapped[Optional[uuid.UUID]] = mapped_column(
-        UUID(as_uuid=True), nullable=True
-    )
+    actor_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     action: Mapped[AuditAction] = mapped_column(
         Enum(AuditAction, name="audit_action", schema="public"),
         nullable=False,
     )
     resource_type: Mapped[str] = mapped_column(String(100), nullable=False)
-    resource_id: Mapped[Optional[str]] = mapped_column(
-        String(255), nullable=True
-    )
-    details: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
-    ip_address: Mapped[Optional[str]] = mapped_column(
-        String(45), nullable=True
-    )
-    chain_hash: Mapped[str] = mapped_column(
-        String(64), nullable=False
-    )
-    previous_hash: Mapped[Optional[str]] = mapped_column(
-        String(64), nullable=True
-    )
+    resource_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    details: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    ip_address: Mapped[str | None] = mapped_column(String(45), nullable=True)
+    chain_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    previous_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
     timestamp: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
     )
 
-    tenant: Mapped["TenantModel"] = relationship(
-        back_populates="audit_logs"
-    )
+    tenant: Mapped[TenantModel] = relationship(back_populates="audit_logs")
 
     def __repr__(self) -> str:
         return (
-            f"<AuditLog(id={self.id!r}, action={self.action!r}, "
-            f"tenant_id={self.tenant_id!r})>"
+            f"<AuditLog(id={self.id!r}, action={self.action!r}, " f"tenant_id={self.tenant_id!r})>"
         )

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import enum
 from dataclasses import dataclass, field
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import Any
 from uuid import UUID, uuid4
@@ -23,7 +23,7 @@ class UsageRecord:
     resource_type: ResourceType = ResourceType.CPU
     quantity: Decimal = Decimal("0")
     unit: str = ""
-    recorded_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    recorded_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 @dataclass
@@ -48,7 +48,7 @@ class Invoice:
     total_amount: Decimal = Decimal("0")
     currency: str = "EUR"
     status: str = "DRAFT"
-    generated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    generated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 @dataclass
@@ -59,5 +59,5 @@ class CostAnomaly:
     expected_value: Decimal = Decimal("0")
     actual_value: Decimal = Decimal("0")
     deviation_factor: Decimal = Decimal("0")
-    detected_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    detected_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     acknowledged: bool = False

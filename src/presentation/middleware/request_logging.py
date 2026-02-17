@@ -10,12 +10,14 @@ from __future__ import annotations
 
 import time
 import uuid
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import structlog
-from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
-from starlette.responses import Response
+
+if TYPE_CHECKING:
+    from fastapi import Request
+    from starlette.responses import Response
 
 logger: structlog.stdlib.BoundLogger = structlog.get_logger("eu_platform.request")
 
@@ -55,9 +57,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         - ``client_ip``   -- client IP address
     """
 
-    async def dispatch(
-        self, request: Request, call_next: RequestResponseEndpoint
-    ) -> Response:
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         request_id = str(uuid.uuid4())
 
         # Attach request_id so downstream handlers can reference it
@@ -116,9 +116,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
             tenant_id = str(tenant_ctx.tenant_id)
 
         user_id: str | None = None
-        jwt_claims: dict[str, Any] | None = getattr(
-            request.state, "jwt_claims", None
-        )
+        jwt_claims: dict[str, Any] | None = getattr(request.state, "jwt_claims", None)
         if jwt_claims:
             user_id = jwt_claims.get("sub")
 

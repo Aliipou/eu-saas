@@ -3,15 +3,15 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
-from typing import Any, AsyncGenerator
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Any
 
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from domain.exceptions.tenant_exceptions import DomainException
+from domain.exceptions.tenant_exceptions import DomainError
 from infrastructure.container import get_container
 from infrastructure.observability.logging_config import setup_logging
 
@@ -19,10 +19,13 @@ from .api.v1 import auth, billing, gdpr, tenants
 from .middleware.request_logging import RequestLoggingMiddleware
 from .middleware.tenant_context import TenantContextMiddleware
 
+if TYPE_CHECKING:
+    from collections.abc import AsyncGenerator
 
 # ---------------------------------------------------------------------------
 # Lifespan (startup / shutdown)
 # ---------------------------------------------------------------------------
+
 
 @asynccontextmanager
 async def _lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
@@ -35,6 +38,7 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 # ---------------------------------------------------------------------------
 # Exception handlers (RFC 9457 Problem Details)
 # ---------------------------------------------------------------------------
+
 
 def _problem_json(
     status_code: int,
@@ -62,7 +66,7 @@ def _problem_json(
     )
 
 
-async def _domain_exception_handler(request: Request, exc: DomainException) -> JSONResponse:
+async def _domain_exception_handler(request: Request, exc: DomainError) -> JSONResponse:
     return _problem_json(
         status_code=exc.status_code,
         title=exc.title,
@@ -146,8 +150,8 @@ def create_app() -> FastAPI:
     app.include_router(gdpr.router, prefix=API_V1_PREFIX)
 
     # -- Exception handlers
-    app.add_exception_handler(DomainException, _domain_exception_handler)
-    app.add_exception_handler(RequestValidationError, _validation_exception_handler)
+    app.add_exception_handler(DomainError, _domain_exception_handler)
+    app.add_exception_handler(RequestValidationError, _validation_exception_handler)  # type: ignore[arg-type]
     app.add_exception_handler(Exception, _generic_exception_handler)
 
     return app
@@ -161,5 +165,5 @@ async def health_check() -> dict[str, Any]:
     return {
         "status": "healthy",
         "version": "1.0.0",
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
     }

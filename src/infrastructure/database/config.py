@@ -8,9 +8,8 @@ and URL builders for both synchronous (psycopg2) and asynchronous
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from functools import lru_cache
-from typing import Optional
 
 
 @dataclass(frozen=True)
@@ -36,10 +35,10 @@ class DatabaseSettings:
     POOL_TIMEOUT: int = 30
 
     # Optional: SSL mode required for EU-grade production deployments
-    SSL_MODE: Optional[str] = None
+    SSL_MODE: str | None = None
 
 
-def get_database_url(settings: Optional[DatabaseSettings] = None) -> str:
+def get_database_url(settings: DatabaseSettings | None = None) -> str:
     """Build a synchronous ``postgresql+psycopg2://`` DSN.
 
     Parameters
@@ -63,7 +62,7 @@ def get_database_url(settings: Optional[DatabaseSettings] = None) -> str:
     return url
 
 
-def get_async_database_url(settings: Optional[DatabaseSettings] = None) -> str:
+def get_async_database_url(settings: DatabaseSettings | None = None) -> str:
     """Build an asynchronous ``postgresql+asyncpg://`` DSN.
 
     Parameters

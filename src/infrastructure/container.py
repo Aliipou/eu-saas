@@ -7,7 +7,6 @@ exposing factory functions suitable for FastAPI's ``Depends()`` system.
 from __future__ import annotations
 
 import logging
-from typing import Any
 
 from application.services.auth_service import AuthService
 from application.services.billing_service import BillingService
@@ -125,6 +124,7 @@ def reset_container() -> None:
 # ---------------------------------------------------------------------------
 # FastAPI dependency factories
 # ---------------------------------------------------------------------------
+
 
 def get_tenant_service() -> TenantService:
     return get_container().tenant_service

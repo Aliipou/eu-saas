@@ -6,16 +6,17 @@ and a Redis-backed cache manager.
 
 from __future__ import annotations
 
-import json
 import logging
-from datetime import date, datetime, timedelta, timezone
-from typing import Any, Optional
-from uuid import UUID
+from datetime import UTC, date, datetime, timedelta
+from typing import TYPE_CHECKING, Any
 
-from domain.models.audit import AuditAction, AuditEntry
-from domain.models.billing import CostAnomaly, CostRecord, Invoice, ResourceType, UsageRecord
-from domain.models.tenant import Tenant, TenantStatus
-from domain.models.user import TenantRole, User
+if TYPE_CHECKING:
+    from uuid import UUID
+
+    from domain.models.audit import AuditEntry
+    from domain.models.billing import CostAnomaly, CostRecord, Invoice, UsageRecord
+    from domain.models.tenant import Tenant, TenantStatus
+    from domain.models.user import User
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +25,7 @@ logger = logging.getLogger(__name__)
 # In-memory repository adapters (swap for real DB repos in production)
 # ---------------------------------------------------------------------------
 
+
 class InMemoryTenantRepository:
     """Synchronous in-memory tenant store for wiring validation."""
 
@@ -31,10 +33,10 @@ class InMemoryTenantRepository:
         self._store: dict[UUID, Tenant] = {}
         self._by_slug: dict[str, UUID] = {}
 
-    def get_by_id(self, tenant_id: UUID) -> Optional[Tenant]:
+    def get_by_id(self, tenant_id: UUID) -> Tenant | None:
         return self._store.get(tenant_id)
 
-    def get_by_slug(self, slug: str) -> Optional[Tenant]:
+    def get_by_slug(self, slug: str) -> Tenant | None:
         tid = self._by_slug.get(slug)
         return self._store.get(tid) if tid else None
 
@@ -42,7 +44,7 @@ class InMemoryTenantRepository:
         self,
         offset: int = 0,
         limit: int = 20,
-        status_filter: Optional[TenantStatus] = None,
+        status_filter: TenantStatus | None = None,
     ) -> tuple[list[Tenant], int]:
         items = list(self._store.values())
         if status_filter:
@@ -67,10 +69,10 @@ class InMemoryUserRepository:
         self._store: dict[UUID, User] = {}
         self._by_email: dict[str, UUID] = {}
 
-    def get_by_id(self, user_id: UUID) -> Optional[User]:
+    def get_by_id(self, user_id: UUID) -> User | None:
         return self._store.get(user_id)
 
-    def get_by_email(self, email: str) -> Optional[User]:
+    def get_by_email(self, email: str) -> User | None:
         uid = self._by_email.get(email)
         return self._store.get(uid) if uid else None
 
@@ -93,7 +95,7 @@ class InMemoryAuditRepository:
     def __init__(self) -> None:
         self._entries: list[AuditEntry] = []
 
-    def get_latest_entry(self, tenant_id: UUID) -> Optional[AuditEntry]:
+    def get_latest_entry(self, tenant_id: UUID) -> AuditEntry | None:
         for entry in reversed(self._entries):
             if entry.tenant_id == tenant_id:
                 return entry
@@ -170,7 +172,7 @@ class InMemoryInvoiceRepository:
 
     def get_by_tenant_and_period(
         self, tenant_id: UUID, period_start: date, period_end: date
-    ) -> Optional[Invoice]:
+    ) -> Invoice | None:
         for inv in self._invoices.values():
             if (
                 inv.tenant_id == tenant_id
@@ -196,17 +198,14 @@ class InMemoryAnomalyRepository:
         return anomalies
 
     def get_recent_by_tenant(self, tenant_id: UUID, days: int = 7) -> list[CostAnomaly]:
-        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
-        return [
-            a
-            for a in self._anomalies
-            if a.tenant_id == tenant_id and a.detected_at >= cutoff
-        ]
+        cutoff = datetime.now(UTC) - timedelta(days=days)
+        return [a for a in self._anomalies if a.tenant_id == tenant_id and a.detected_at >= cutoff]
 
 
 # ---------------------------------------------------------------------------
 # Refresh token store (in-memory, swap for Redis in production)
 # ---------------------------------------------------------------------------
+
 
 class InMemoryRefreshTokenStore:
     """In-memory refresh token store."""
@@ -217,12 +216,12 @@ class InMemoryRefreshTokenStore:
     def store(self, token_id: str, user_id: UUID, expires_at: datetime) -> None:
         self._tokens[token_id] = (user_id, expires_at)
 
-    def validate(self, token_id: str) -> Optional[UUID]:
+    def validate(self, token_id: str) -> UUID | None:
         entry = self._tokens.get(token_id)
         if entry is None:
             return None
         user_id, expires_at = entry
-        if datetime.now(timezone.utc) > expires_at:
+        if datetime.now(UTC) > expires_at:
             del self._tokens[token_id]
             return None
         return user_id
@@ -234,6 +233,7 @@ class InMemoryRefreshTokenStore:
 # ---------------------------------------------------------------------------
 # Cache manager
 # ---------------------------------------------------------------------------
+
 
 class InMemoryCacheManager:
     """Simple in-memory cache manager."""
@@ -252,6 +252,7 @@ class InMemoryCacheManager:
 # Export job repository
 # ---------------------------------------------------------------------------
 
+
 class InMemoryExportJobRepository:
     """In-memory export job tracking."""
 
@@ -265,19 +266,19 @@ class InMemoryExportJobRepository:
             "status": status,
             "download_url": None,
             "error": None,
-            "created_at": datetime.now(timezone.utc),
+            "created_at": datetime.now(UTC),
             "completed_at": None,
         }
 
-    def get_status(self, job_id: str) -> Optional[Any]:
+    def get_status(self, job_id: str) -> Any | None:
         return self._jobs.get(job_id)
 
     def update_status(
         self,
         job_id: str,
         status: Any,
-        download_url: Optional[str] = None,
-        error: Optional[str] = None,
+        download_url: str | None = None,
+        error: str | None = None,
     ) -> None:
         if job_id in self._jobs:
             self._jobs[job_id]["status"] = status
@@ -291,13 +292,14 @@ class InMemoryExportJobRepository:
 # Retention repository
 # ---------------------------------------------------------------------------
 
+
 class InMemoryRetentionRepository:
     """In-memory retention policy and record tracking."""
 
     def __init__(self) -> None:
         self._policies: dict[UUID, Any] = {}
 
-    def get_policy(self, tenant_id: UUID) -> Optional[Any]:
+    def get_policy(self, tenant_id: UUID) -> Any | None:
         return self._policies.get(tenant_id)
 
     def save_policy(self, policy: Any) -> Any:
@@ -321,6 +323,7 @@ class InMemoryRetentionRepository:
 # Tenant data repository (for GDPR erasure)
 # ---------------------------------------------------------------------------
 
+
 class InMemoryTenantDataRepository:
     """In-memory tenant data repo for cascade delete."""
 
@@ -332,6 +335,7 @@ class InMemoryTenantDataRepository:
 # ---------------------------------------------------------------------------
 # Schema manager adapter
 # ---------------------------------------------------------------------------
+
 
 class NoOpSchemaManager:
     """Schema manager that logs but doesn't execute SQL."""
@@ -349,6 +353,7 @@ class NoOpSchemaManager:
 # ---------------------------------------------------------------------------
 # Event publisher
 # ---------------------------------------------------------------------------
+
 
 class LoggingEventPublisher:
     """Event publisher that logs events."""

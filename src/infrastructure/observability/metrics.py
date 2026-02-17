@@ -8,21 +8,21 @@ function that wires automatic request tracking into any FastAPI application.
 from __future__ import annotations
 
 import time
-from typing import Callable
+from typing import TYPE_CHECKING
 
-from fastapi import FastAPI, Request, Response
 from prometheus_client import (
-    CollectorRegistry,
+    CONTENT_TYPE_LATEST,
+    REGISTRY,
     Counter,
     Gauge,
     Histogram,
     generate_latest,
-    CONTENT_TYPE_LATEST,
-    REGISTRY,
 )
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.responses import Response as StarletteResponse
 
+if TYPE_CHECKING:
+    from fastapi import FastAPI, Request, Response
 
 # ======================================================================
 # Custom metrics (module-level singletons)
@@ -69,12 +69,11 @@ cost_anomalies_total = Counter(
 # Middleware for automatic request instrumentation
 # ======================================================================
 
+
 class PrometheusMiddleware(BaseHTTPMiddleware):
     """Middleware that records request count and latency per endpoint."""
 
-    async def dispatch(
-        self, request: Request, call_next: RequestResponseEndpoint
-    ) -> Response:
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         method = request.method
         # Use the matched route path template when available, otherwise
         # fall back to the raw URL path.
@@ -114,8 +113,8 @@ class PrometheusMiddleware(BaseHTTPMiddleware):
         """
         route = request.scope.get("route")
         if route and hasattr(route, "path"):
-            return route.path
-        return request.url.path
+            return str(route.path)
+        return str(request.url.path)
 
     @staticmethod
     def _extract_tenant_id(request: Request) -> str:
@@ -127,20 +126,20 @@ class PrometheusMiddleware(BaseHTTPMiddleware):
         # From auth middleware (most common path).
         user = getattr(request.state, "user", None)
         if user and isinstance(user, dict) and "tenant_id" in user:
-            return user["tenant_id"]
+            return str(user["tenant_id"])
 
         # From path parameters.
         tenant_id = request.path_params.get("tenant_id")
         if tenant_id:
             return str(tenant_id)
 
-        # From a custom header.
-        return request.headers.get("x-tenant-id", "unknown")
+        return str(request.headers.get("x-tenant-id", "unknown"))
 
 
 # ======================================================================
 # Setup helper
 # ======================================================================
+
 
 def setup_metrics(app: FastAPI) -> None:
     """

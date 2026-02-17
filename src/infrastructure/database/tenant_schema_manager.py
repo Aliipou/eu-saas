@@ -11,11 +11,13 @@ these schemas using raw SQL over a SQLAlchemy engine connection.
 from __future__ import annotations
 
 import re
-from typing import List, Optional
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import text
-from sqlalchemy.engine import Engine
-from sqlalchemy.ext.asyncio import AsyncEngine
+
+if TYPE_CHECKING:
+    from sqlalchemy.engine import Engine
+    from sqlalchemy.ext.asyncio import AsyncEngine
 
 
 def _sanitise_slug(slug: str) -> str:
@@ -25,9 +27,7 @@ def _sanitise_slug(slug: str) -> str:
     not alphanumeric, hyphens, or underscores.
     """
     if not re.match(r"^[a-z0-9][a-z0-9_-]*$", slug):
-        raise ValueError(
-            f"Invalid tenant slug: {slug!r}.  Must match ^[a-z0-9][a-z0-9_-]*$"
-        )
+        raise ValueError(f"Invalid tenant slug: {slug!r}.  Must match ^[a-z0-9][a-z0-9_-]*$")
     return slug.replace("-", "_")
 
 
@@ -77,9 +77,7 @@ class TenantSchemaManager:
         with self._engine.begin() as conn:
             exists = self._check_exists(conn, schema)
             if exists:
-                raise RuntimeError(
-                    f"Schema {schema!r} already exists for tenant {tenant_slug!r}"
-                )
+                raise RuntimeError(f"Schema {schema!r} already exists for tenant {tenant_slug!r}")
             conn.execute(text(f"CREATE SCHEMA {schema}"))
         return schema
 
@@ -104,9 +102,7 @@ class TenantSchemaManager:
         schema = _schema_name(tenant_slug)
         with self._engine.begin() as conn:
             if not self._check_exists(conn, schema):
-                raise RuntimeError(
-                    f"Schema {schema!r} does not exist for tenant {tenant_slug!r}"
-                )
+                raise RuntimeError(f"Schema {schema!r} does not exist for tenant {tenant_slug!r}")
             conn.execute(text(f"DROP SCHEMA {schema} CASCADE"))
 
     # ------------------------------------------------------------------
@@ -125,7 +121,7 @@ class TenantSchemaManager:
         with self._engine.connect() as conn:
             return self._check_exists(conn, schema)
 
-    def list_schemas(self) -> List[str]:
+    def list_schemas(self) -> list[str]:
         """Return a sorted list of all ``tenant_*`` schema names."""
         with self._engine.connect() as conn:
             result = conn.execute(
@@ -158,9 +154,7 @@ class TenantSchemaManager:
         schema = _schema_name(tenant_slug)
         with self._engine.connect() as conn:
             if not self._check_exists(conn, schema):
-                raise RuntimeError(
-                    f"Schema {schema!r} does not exist for tenant {tenant_slug!r}"
-                )
+                raise RuntimeError(f"Schema {schema!r} does not exist for tenant {tenant_slug!r}")
             result = conn.execute(
                 text(
                     "SELECT COALESCE(SUM(pg_total_relation_size(quote_ident(schemaname) "
@@ -177,12 +171,9 @@ class TenantSchemaManager:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _check_exists(conn, schema: str) -> bool:
+    def _check_exists(conn: Any, schema: str) -> bool:
         result = conn.execute(
-            text(
-                "SELECT 1 FROM information_schema.schemata "
-                "WHERE schema_name = :schema"
-            ),
+            text("SELECT 1 FROM information_schema.schemata " "WHERE schema_name = :schema"),
             {"schema": schema},
         )
         return result.fetchone() is not None
@@ -191,6 +182,7 @@ class TenantSchemaManager:
 # ---------------------------------------------------------------------------
 # Async variant
 # ---------------------------------------------------------------------------
+
 
 class AsyncTenantSchemaManager:
     """Async counterpart of :class:`TenantSchemaManager`.
@@ -209,9 +201,7 @@ class AsyncTenantSchemaManager:
         async with self._engine.begin() as conn:
             exists = await self._check_exists(conn, schema)
             if exists:
-                raise RuntimeError(
-                    f"Schema {schema!r} already exists for tenant {tenant_slug!r}"
-                )
+                raise RuntimeError(f"Schema {schema!r} already exists for tenant {tenant_slug!r}")
             await conn.execute(text(f"CREATE SCHEMA {schema}"))
         return schema
 
@@ -219,9 +209,7 @@ class AsyncTenantSchemaManager:
         schema = _schema_name(tenant_slug)
         async with self._engine.begin() as conn:
             if not await self._check_exists(conn, schema):
-                raise RuntimeError(
-                    f"Schema {schema!r} does not exist for tenant {tenant_slug!r}"
-                )
+                raise RuntimeError(f"Schema {schema!r} does not exist for tenant {tenant_slug!r}")
             await conn.execute(text(f"DROP SCHEMA {schema} CASCADE"))
 
     async def schema_exists(self, tenant_slug: str) -> bool:
@@ -229,7 +217,7 @@ class AsyncTenantSchemaManager:
         async with self._engine.connect() as conn:
             return await self._check_exists(conn, schema)
 
-    async def list_schemas(self) -> List[str]:
+    async def list_schemas(self) -> list[str]:
         async with self._engine.connect() as conn:
             result = await conn.execute(
                 text(
@@ -244,9 +232,7 @@ class AsyncTenantSchemaManager:
         schema = _schema_name(tenant_slug)
         async with self._engine.connect() as conn:
             if not await self._check_exists(conn, schema):
-                raise RuntimeError(
-                    f"Schema {schema!r} does not exist for tenant {tenant_slug!r}"
-                )
+                raise RuntimeError(f"Schema {schema!r} does not exist for tenant {tenant_slug!r}")
             result = await conn.execute(
                 text(
                     "SELECT COALESCE(SUM(pg_total_relation_size(quote_ident(schemaname) "
@@ -259,12 +245,9 @@ class AsyncTenantSchemaManager:
             return int(row[0]) if row else 0
 
     @staticmethod
-    async def _check_exists(conn, schema: str) -> bool:
+    async def _check_exists(conn: Any, schema: str) -> bool:
         result = await conn.execute(
-            text(
-                "SELECT 1 FROM information_schema.schemata "
-                "WHERE schema_name = :schema"
-            ),
+            text("SELECT 1 FROM information_schema.schemata " "WHERE schema_name = :schema"),
             {"schema": schema},
         )
         return result.fetchone() is not None

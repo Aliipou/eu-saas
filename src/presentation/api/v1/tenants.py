@@ -2,39 +2,44 @@
 
 from __future__ import annotations
 
+import contextlib
 import uuid
-from datetime import datetime, timezone
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
+from fastapi import APIRouter, Depends, Path, Query, status
 
-from infrastructure.container import get_tenant_service
-from application.services.tenant_service import TenantService
 from domain.models.tenant import TenantStatus as DomainTenantStatus
+from infrastructure.container import get_tenant_service
 
-from ...middleware.tenant_context import TenantContext, get_current_tenant
 from .schemas import (
     ErrorResponse,
     PaginationMeta,
     TenantCreate,
     TenantListResponse,
     TenantResponse,
+    TenantTier,
     TenantUpdate,
 )
+
+if TYPE_CHECKING:
+    from application.services.tenant_service import TenantService
+    from domain.models.tenant import Tenant
 
 router = APIRouter(prefix="/tenants", tags=["Tenants"])
 
 TenantID = Annotated[uuid.UUID, Path(description="Unique tenant identifier.")]
 
 
-def _tenant_to_response(tenant: object) -> TenantResponse:
+def _tenant_to_response(tenant: Tenant) -> TenantResponse:
     """Map a domain Tenant to the API response schema."""
     return TenantResponse(
         id=tenant.id,
         name=tenant.name,
         slug=tenant.slug,
         status=tenant.status.value,
-        tier="FREE",
+        tier=(
+            TenantTier(tenant.settings.get("tier", "FREE")) if tenant.settings else TenantTier.FREE
+        ),
         schema_name=tenant.schema_name,
         data_residency_region=tenant.metadata.get("data_residency_region", "eu-central-1"),
         admin_email=tenant.owner_email,
@@ -85,10 +90,8 @@ async def list_tenants(
 ) -> TenantListResponse:
     domain_status = None
     if status_filter:
-        try:
+        with contextlib.suppress(ValueError):
             domain_status = DomainTenantStatus(status_filter)
-        except ValueError:
-            pass
 
     result = service.list_tenants(page=page, size=page_size, status_filter=domain_status)
     items = [_tenant_to_response(t) for t in result.items]
@@ -189,7 +192,7 @@ async def activate_tenant(
 async def delete_tenant(
     tenant_id: TenantID,
     service: TenantService = Depends(get_tenant_service),
-) -> dict:
+) -> dict[str, str]:
     tenant = service.deprovision_tenant(tenant_id)
     return {
         "status": tenant.status.value,

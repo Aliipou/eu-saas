@@ -10,10 +10,9 @@ from __future__ import annotations
 
 import logging
 import sys
-from typing import Any, Optional
+from typing import Any
 
 import structlog
-
 
 # ======================================================================
 # Constants
@@ -26,9 +25,8 @@ SERVICE_NAME: str = "eu-mt-platform"
 # Custom processors
 # ======================================================================
 
-def add_service_name(
-    logger: Any, method_name: str, event_dict: dict[str, Any]
-) -> dict[str, Any]:
+
+def add_service_name(logger: Any, method_name: str, event_dict: dict[str, Any]) -> dict[str, Any]:
     """Inject the service name into every log event."""
     event_dict.setdefault("service", SERVICE_NAME)
     return event_dict
@@ -37,6 +35,7 @@ def add_service_name(
 # ======================================================================
 # Setup
 # ======================================================================
+
 
 def setup_logging(log_level: str = "INFO") -> None:
     """
@@ -59,7 +58,7 @@ def setup_logging(log_level: str = "INFO") -> None:
         structlog.contextvars.merge_contextvars,
         structlog.stdlib.add_log_level,
         structlog.stdlib.add_logger_name,
-        add_service_name,
+        add_service_name,  # type: ignore[list-item]
         structlog.processors.TimeStamper(fmt="iso"),
         structlog.processors.StackInfoRenderer(),
         structlog.processors.UnicodeDecoder(),
@@ -98,6 +97,7 @@ def setup_logging(log_level: str = "INFO") -> None:
 # Logger factory
 # ======================================================================
 
+
 def get_logger(name: str) -> structlog.stdlib.BoundLogger:
     """
     Return a bound structlog logger pre-populated with the given *name*.
@@ -108,4 +108,4 @@ def get_logger(name: str) -> structlog.stdlib.BoundLogger:
         log = log.bind(tenant_id="t-123")
         log.info("Invoice generated", amount=42.50)
     """
-    return structlog.get_logger(name)
+    return structlog.get_logger(name)  # type: ignore[no-any-return]

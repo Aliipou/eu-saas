@@ -1,6 +1,6 @@
 from domain.exceptions.tenant_exceptions import (
     CrossTenantAccessError,
-    DomainException,
+    DomainError,
     InvalidStateTransitionError,
     SchemaCreationError,
     TenantAlreadyExistsError,
@@ -10,7 +10,7 @@ from domain.exceptions.tenant_exceptions import (
 
 __all__ = [
     "CrossTenantAccessError",
-    "DomainException",
+    "DomainError",
     "InvalidStateTransitionError",
     "SchemaCreationError",
     "TenantAlreadyExistsError",

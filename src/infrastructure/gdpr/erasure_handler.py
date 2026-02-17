@@ -10,14 +10,14 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
-from typing import Any, Optional, Protocol
-
+from typing import Protocol
 
 # ======================================================================
 # Step tracking
 # ======================================================================
+
 
 class ErasureStep(str, Enum):
     FREEZE_TENANT = "freeze_tenant"
@@ -34,7 +34,7 @@ class StepResult:
     step: ErasureStep
     success: bool
     detail: str = ""
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 @dataclass
@@ -44,14 +44,15 @@ class ErasureResult:
     tenant_id: str
     success: bool
     steps: list[StepResult] = field(default_factory=list)
-    started_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    completed_at: Optional[datetime] = None
-    archive_path: Optional[str] = None
+    started_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    completed_at: datetime | None = None
+    archive_path: str | None = None
 
 
 # ======================================================================
 # Backend protocol
 # ======================================================================
+
 
 class ErasureBackend(Protocol):
     """
@@ -147,7 +148,7 @@ class ErasureHandler:
                     step_result.detail,
                 )
 
-        result.completed_at = datetime.now(timezone.utc)
+        result.completed_at = datetime.now(UTC)
         logger.info(
             "Erasure for tenant %s completed. success=%s",
             tenant_id,
@@ -214,12 +215,16 @@ class ErasureHandler:
 
     async def export_final_archive(self, tenant_id: str) -> StepResult:
         return await self._run_step(
-            ErasureStep.EXPORT_FINAL_ARCHIVE, tenant_id, ErasureResult(tenant_id=tenant_id, success=True)
+            ErasureStep.EXPORT_FINAL_ARCHIVE,
+            tenant_id,
+            ErasureResult(tenant_id=tenant_id, success=True),
         )
 
     async def cascade_delete_data(self, tenant_id: str) -> StepResult:
         return await self._run_step(
-            ErasureStep.CASCADE_DELETE_DATA, tenant_id, ErasureResult(tenant_id=tenant_id, success=True)
+            ErasureStep.CASCADE_DELETE_DATA,
+            tenant_id,
+            ErasureResult(tenant_id=tenant_id, success=True),
         )
 
     async def drop_schema(self, tenant_id: str) -> StepResult:
@@ -229,7 +234,9 @@ class ErasureHandler:
 
     async def rotate_encryption_key(self, tenant_id: str) -> StepResult:
         return await self._run_step(
-            ErasureStep.ROTATE_ENCRYPTION_KEY, tenant_id, ErasureResult(tenant_id=tenant_id, success=True)
+            ErasureStep.ROTATE_ENCRYPTION_KEY,
+            tenant_id,
+            ErasureResult(tenant_id=tenant_id, success=True),
         )
 
     async def purge_caches(self, tenant_id: str) -> StepResult:
@@ -239,5 +246,7 @@ class ErasureHandler:
 
     async def write_audit_record(self, tenant_id: str) -> StepResult:
         return await self._run_step(
-            ErasureStep.WRITE_AUDIT_RECORD, tenant_id, ErasureResult(tenant_id=tenant_id, success=True)
+            ErasureStep.WRITE_AUDIT_RECORD,
+            tenant_id,
+            ErasureResult(tenant_id=tenant_id, success=True),
         )

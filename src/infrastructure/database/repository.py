@@ -12,13 +12,10 @@ from __future__ import annotations
 
 import hashlib
 import json
-import uuid
 from datetime import date, datetime
-from decimal import Decimal
-from typing import Any, Dict, List, Optional, Sequence
+from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import and_, delete, func, select, update
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import delete, select, update
 
 from .models import (
     AuditAction,
@@ -34,10 +31,17 @@ from .models import (
     UserRole,
 )
 
+if TYPE_CHECKING:
+    import uuid
+    from collections.abc import Sequence
+    from decimal import Decimal
+
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 # =========================================================================
 # TenantRepository -- operates on the PUBLIC schema
 # =========================================================================
+
 
 class TenantRepository:
     """CRUD operations for :class:`TenantModel` (``public.tenants``).
@@ -58,10 +62,10 @@ class TenantRepository:
         name: str,
         slug: str,
         tier: TenantTier = TenantTier.FREE,
-        domain: Optional[str] = None,
+        domain: str | None = None,
         data_residency_region: str = "eu-west-1",
         max_users: int = 50,
-        metadata_json: Optional[dict] = None,
+        metadata_json: dict[str, Any] | None = None,
     ) -> TenantModel:
         tenant = TenantModel(
             name=name,
@@ -78,20 +82,20 @@ class TenantRepository:
         await self._session.refresh(tenant)
         return tenant
 
-    async def get_by_id(self, tenant_id: uuid.UUID) -> Optional[TenantModel]:
+    async def get_by_id(self, tenant_id: uuid.UUID) -> TenantModel | None:
         stmt = select(TenantModel).where(TenantModel.id == tenant_id)
         result = await self._session.execute(stmt)
-        return result.scalar_one_or_none()
+        return result.scalar_one_or_none()  # type: ignore[no-any-return]
 
-    async def get_by_slug(self, slug: str) -> Optional[TenantModel]:
+    async def get_by_slug(self, slug: str) -> TenantModel | None:
         stmt = select(TenantModel).where(TenantModel.slug == slug)
         result = await self._session.execute(stmt)
-        return result.scalar_one_or_none()
+        return result.scalar_one_or_none()  # type: ignore[no-any-return]
 
     async def list_all(
         self,
         *,
-        status: Optional[TenantStatus] = None,
+        status: TenantStatus | None = None,
         offset: int = 0,
         limit: int = 100,
     ) -> Sequence[TenantModel]:
@@ -100,16 +104,22 @@ class TenantRepository:
             stmt = stmt.where(TenantModel.status == status)
         stmt = stmt.order_by(TenantModel.created_at.desc())
         result = await self._session.execute(stmt)
-        return result.scalars().all()
+        return result.scalars().all()  # type: ignore[no-any-return]
 
     async def update(
         self,
         tenant_id: uuid.UUID,
         **fields: Any,
-    ) -> Optional[TenantModel]:
+    ) -> TenantModel | None:
         allowed = {
-            "name", "slug", "status", "tier", "domain",
-            "data_residency_region", "max_users", "is_gdpr_compliant",
+            "name",
+            "slug",
+            "status",
+            "tier",
+            "domain",
+            "data_residency_region",
+            "max_users",
+            "is_gdpr_compliant",
             "metadata_json",
         }
         update_data = {k: v for k, v in fields.items() if k in allowed}
@@ -124,18 +134,19 @@ class TenantRepository:
         )
         result = await self._session.execute(stmt)
         await self._session.flush()
-        return result.scalar_one_or_none()
+        return result.scalar_one_or_none()  # type: ignore[no-any-return]
 
     async def delete(self, tenant_id: uuid.UUID) -> bool:
         stmt = delete(TenantModel).where(TenantModel.id == tenant_id)
         result = await self._session.execute(stmt)
         await self._session.flush()
-        return result.rowcount > 0
+        return bool(result.rowcount > 0)
 
 
 # =========================================================================
 # UserRepository -- operates on a TENANT schema
 # =========================================================================
+
 
 class UserRepository:
     """CRUD operations for :class:`UserModel` (``tenant_{slug}.users``).
@@ -171,15 +182,15 @@ class UserRepository:
         await self._session.refresh(user)
         return user
 
-    async def get_by_id(self, user_id: uuid.UUID) -> Optional[UserModel]:
+    async def get_by_id(self, user_id: uuid.UUID) -> UserModel | None:
         stmt = select(UserModel).where(UserModel.id == user_id)
         result = await self._session.execute(stmt)
-        return result.scalar_one_or_none()
+        return result.scalar_one_or_none()  # type: ignore[no-any-return]
 
-    async def get_by_email(self, email: str) -> Optional[UserModel]:
+    async def get_by_email(self, email: str) -> UserModel | None:
         stmt = select(UserModel).where(UserModel.email == email)
         result = await self._session.execute(stmt)
-        return result.scalar_one_or_none()
+        return result.scalar_one_or_none()  # type: ignore[no-any-return]
 
     async def list_by_tenant(
         self,
@@ -187,28 +198,27 @@ class UserRepository:
         *,
         offset: int = 0,
         limit: int = 100,
-        is_active: Optional[bool] = None,
+        is_active: bool | None = None,
     ) -> Sequence[UserModel]:
-        stmt = (
-            select(UserModel)
-            .where(UserModel.tenant_id == tenant_id)
-            .offset(offset)
-            .limit(limit)
-        )
+        stmt = select(UserModel).where(UserModel.tenant_id == tenant_id).offset(offset).limit(limit)
         if is_active is not None:
             stmt = stmt.where(UserModel.is_active == is_active)
         stmt = stmt.order_by(UserModel.created_at.desc())
         result = await self._session.execute(stmt)
-        return result.scalars().all()
+        return result.scalars().all()  # type: ignore[no-any-return]
 
     async def update(
         self,
         user_id: uuid.UUID,
         **fields: Any,
-    ) -> Optional[UserModel]:
+    ) -> UserModel | None:
         allowed = {
-            "email", "display_name", "hashed_password", "role",
-            "is_active", "last_login_at",
+            "email",
+            "display_name",
+            "hashed_password",
+            "role",
+            "is_active",
+            "last_login_at",
         }
         update_data = {k: v for k, v in fields.items() if k in allowed}
         if not update_data:
@@ -222,18 +232,19 @@ class UserRepository:
         )
         result = await self._session.execute(stmt)
         await self._session.flush()
-        return result.scalar_one_or_none()
+        return result.scalar_one_or_none()  # type: ignore[no-any-return]
 
     async def delete(self, user_id: uuid.UUID) -> bool:
         stmt = delete(UserModel).where(UserModel.id == user_id)
         result = await self._session.execute(stmt)
         await self._session.flush()
-        return result.rowcount > 0
+        return bool(result.rowcount > 0)
 
 
 # =========================================================================
 # BillingRepository -- operates on a TENANT schema
 # =========================================================================
+
 
 class BillingRepository:
     """CRUD for usage records, cost records, and invoices.
@@ -257,8 +268,8 @@ class BillingRepository:
         resource_type: str,
         quantity: Decimal,
         unit: str,
-        user_id: Optional[uuid.UUID] = None,
-        metadata_json: Optional[dict] = None,
+        user_id: uuid.UUID | None = None,
+        metadata_json: dict[str, Any] | None = None,
     ) -> UsageRecordModel:
         record = UsageRecordModel(
             tenant_id=tenant_id,
@@ -277,16 +288,13 @@ class BillingRepository:
         self,
         tenant_id: uuid.UUID,
         *,
-        start: Optional[datetime] = None,
-        end: Optional[datetime] = None,
-        resource_type: Optional[str] = None,
+        start: datetime | None = None,
+        end: datetime | None = None,
+        resource_type: str | None = None,
         offset: int = 0,
         limit: int = 500,
     ) -> Sequence[UsageRecordModel]:
-        stmt = (
-            select(UsageRecordModel)
-            .where(UsageRecordModel.tenant_id == tenant_id)
-        )
+        stmt = select(UsageRecordModel).where(UsageRecordModel.tenant_id == tenant_id)
         if start is not None:
             stmt = stmt.where(UsageRecordModel.recorded_at >= start)
         if end is not None:
@@ -296,7 +304,7 @@ class BillingRepository:
         stmt = stmt.order_by(UsageRecordModel.recorded_at.desc())
         stmt = stmt.offset(offset).limit(limit)
         result = await self._session.execute(stmt)
-        return result.scalars().all()
+        return result.scalars().all()  # type: ignore[no-any-return]
 
     # ---- Cost Records -------------------------------------------------
 
@@ -309,8 +317,8 @@ class BillingRepository:
         currency: str = "EUR",
         period_start: date,
         period_end: date,
-        invoice_id: Optional[uuid.UUID] = None,
-        metadata_json: Optional[dict] = None,
+        invoice_id: uuid.UUID | None = None,
+        metadata_json: dict[str, Any] | None = None,
     ) -> CostRecordModel:
         record = CostRecordModel(
             tenant_id=tenant_id,
@@ -331,15 +339,12 @@ class BillingRepository:
         self,
         tenant_id: uuid.UUID,
         *,
-        period_start: Optional[date] = None,
-        period_end: Optional[date] = None,
+        period_start: date | None = None,
+        period_end: date | None = None,
         offset: int = 0,
         limit: int = 500,
     ) -> Sequence[CostRecordModel]:
-        stmt = (
-            select(CostRecordModel)
-            .where(CostRecordModel.tenant_id == tenant_id)
-        )
+        stmt = select(CostRecordModel).where(CostRecordModel.tenant_id == tenant_id)
         if period_start is not None:
             stmt = stmt.where(CostRecordModel.period_start >= period_start)
         if period_end is not None:
@@ -347,7 +352,7 @@ class BillingRepository:
         stmt = stmt.order_by(CostRecordModel.created_at.desc())
         stmt = stmt.offset(offset).limit(limit)
         result = await self._session.execute(stmt)
-        return result.scalars().all()
+        return result.scalars().all()  # type: ignore[no-any-return]
 
     # ---- Invoices -----------------------------------------------------
 
@@ -361,7 +366,7 @@ class BillingRepository:
         period_start: date,
         period_end: date,
         status: InvoiceStatus = InvoiceStatus.DRAFT,
-        metadata_json: Optional[dict] = None,
+        metadata_json: dict[str, Any] | None = None,
     ) -> InvoiceModel:
         invoice = InvoiceModel(
             tenant_id=tenant_id,
@@ -382,25 +387,23 @@ class BillingRepository:
         self,
         tenant_id: uuid.UUID,
         *,
-        status: Optional[InvoiceStatus] = None,
+        status: InvoiceStatus | None = None,
         offset: int = 0,
         limit: int = 100,
     ) -> Sequence[InvoiceModel]:
-        stmt = (
-            select(InvoiceModel)
-            .where(InvoiceModel.tenant_id == tenant_id)
-        )
+        stmt = select(InvoiceModel).where(InvoiceModel.tenant_id == tenant_id)
         if status is not None:
             stmt = stmt.where(InvoiceModel.status == status)
         stmt = stmt.order_by(InvoiceModel.created_at.desc())
         stmt = stmt.offset(offset).limit(limit)
         result = await self._session.execute(stmt)
-        return result.scalars().all()
+        return result.scalars().all()  # type: ignore[no-any-return]
 
 
 # =========================================================================
 # AuditRepository -- operates on the PUBLIC schema (append-only)
 # =========================================================================
+
 
 class AuditRepository:
     """Append-only audit log with hash-chain integrity.
@@ -422,13 +425,13 @@ class AuditRepository:
     def _compute_hash(
         *,
         tenant_id: uuid.UUID,
-        actor_id: Optional[uuid.UUID],
+        actor_id: uuid.UUID | None,
         action: str,
         resource_type: str,
-        resource_id: Optional[str],
-        details: Optional[dict],
+        resource_id: str | None,
+        details: dict[str, Any] | None,
         timestamp: datetime,
-        previous_hash: Optional[str],
+        previous_hash: str | None,
     ) -> str:
         """Compute a SHA-256 hash for chain integrity."""
         payload = json.dumps(
@@ -447,7 +450,7 @@ class AuditRepository:
         )
         return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
-    async def _get_latest_hash(self, tenant_id: uuid.UUID) -> Optional[str]:
+    async def _get_latest_hash(self, tenant_id: uuid.UUID) -> str | None:
         """Retrieve the ``chain_hash`` of the most recent audit entry
         for the given tenant."""
         stmt = (
@@ -458,7 +461,7 @@ class AuditRepository:
         )
         result = await self._session.execute(stmt)
         row = result.scalar_one_or_none()
-        return row
+        return row  # type: ignore[no-any-return]
 
     async def append_entry(
         self,
@@ -466,10 +469,10 @@ class AuditRepository:
         tenant_id: uuid.UUID,
         action: AuditAction,
         resource_type: str,
-        actor_id: Optional[uuid.UUID] = None,
-        resource_id: Optional[str] = None,
-        details: Optional[dict] = None,
-        ip_address: Optional[str] = None,
+        actor_id: uuid.UUID | None = None,
+        resource_id: str | None = None,
+        details: dict[str, Any] | None = None,
+        ip_address: str | None = None,
     ) -> AuditLogModel:
         """Append a new entry to the audit log, maintaining the hash chain.
 
@@ -529,17 +532,14 @@ class AuditRepository:
         self,
         tenant_id: uuid.UUID,
         *,
-        action: Optional[AuditAction] = None,
-        start: Optional[datetime] = None,
-        end: Optional[datetime] = None,
+        action: AuditAction | None = None,
+        start: datetime | None = None,
+        end: datetime | None = None,
         offset: int = 0,
         limit: int = 200,
     ) -> Sequence[AuditLogModel]:
         """Retrieve audit entries for a tenant, optionally filtered."""
-        stmt = (
-            select(AuditLogModel)
-            .where(AuditLogModel.tenant_id == tenant_id)
-        )
+        stmt = select(AuditLogModel).where(AuditLogModel.tenant_id == tenant_id)
         if action is not None:
             stmt = stmt.where(AuditLogModel.action == action)
         if start is not None:
@@ -549,12 +549,12 @@ class AuditRepository:
         stmt = stmt.order_by(AuditLogModel.timestamp.asc())
         stmt = stmt.offset(offset).limit(limit)
         result = await self._session.execute(stmt)
-        return result.scalars().all()
+        return result.scalars().all()  # type: ignore[no-any-return]
 
     async def verify_chain_integrity(
         self,
         tenant_id: uuid.UUID,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Verify the hash-chain integrity of all audit entries for a
         tenant.
 
@@ -580,7 +580,7 @@ class AuditRepository:
                 "broken_entry_id": None,
             }
 
-        previous_hash: Optional[str] = None
+        previous_hash: str | None = None
 
         for idx, entry in enumerate(entries):
             # Verify the previous_hash pointer
@@ -596,7 +596,9 @@ class AuditRepository:
             expected_hash = self._compute_hash(
                 tenant_id=entry.tenant_id,
                 actor_id=entry.actor_id,
-                action=entry.action.value if isinstance(entry.action, AuditAction) else entry.action,
+                action=(
+                    entry.action.value if isinstance(entry.action, AuditAction) else entry.action
+                ),
                 resource_type=entry.resource_type,
                 resource_id=entry.resource_id,
                 details=entry.details,

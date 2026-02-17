@@ -1,20 +1,18 @@
 from __future__ import annotations
 
 import statistics
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
-from typing import Optional
 from uuid import uuid4
 
 from domain.models.billing import CostAnomaly, ResourceType
 
-
 DEFAULT_PRICING: dict[ResourceType, Decimal] = {
-    ResourceType.CPU: Decimal("0.02"),        # per hour
-    ResourceType.MEMORY: Decimal("0.005"),     # per GB-hour
-    ResourceType.STORAGE: Decimal("0.01"),     # per GB-day
-    ResourceType.NETWORK: Decimal("0.001"),    # per GB
-    ResourceType.API_CALLS: Decimal("0.0001"), # per call
+    ResourceType.CPU: Decimal("0.02"),  # per hour
+    ResourceType.MEMORY: Decimal("0.005"),  # per GB-hour
+    ResourceType.STORAGE: Decimal("0.01"),  # per GB-day
+    ResourceType.NETWORK: Decimal("0.001"),  # per GB
+    ResourceType.API_CALLS: Decimal("0.0001"),  # per call
 }
 
 
@@ -24,7 +22,7 @@ class CostCalculator:
         self,
         resource_type: ResourceType,
         quantity: Decimal,
-        custom_pricing: Optional[dict[ResourceType, Decimal]] = None,
+        custom_pricing: dict[ResourceType, Decimal] | None = None,
     ) -> Decimal:
         pricing = custom_pricing if custom_pricing is not None else DEFAULT_PRICING
         unit_price = pricing.get(resource_type, Decimal("0"))
@@ -35,7 +33,7 @@ class CostCalculator:
         current_value: float,
         historical_values: list[float],
         threshold: float = 2.5,
-    ) -> Optional[CostAnomaly]:
+    ) -> CostAnomaly | None:
         if len(historical_values) < 2:
             return None
 
@@ -55,7 +53,7 @@ class CostCalculator:
                 expected_value=Decimal(str(round(mean, 6))),
                 actual_value=Decimal(str(round(current_value, 6))),
                 deviation_factor=Decimal(str(round(deviation_factor, 6))),
-                detected_at=datetime.now(timezone.utc),
+                detected_at=datetime.now(UTC),
                 acknowledged=False,
             )
 

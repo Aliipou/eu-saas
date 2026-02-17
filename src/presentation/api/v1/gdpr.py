@@ -3,27 +3,28 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
-from typing import Annotated
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 
 from infrastructure.container import get_gdpr_service
-from application.services.gdpr_service import GDPRService
 
 from .schemas import (
     AuditAction,
-    AuditLogEntry,
     AuditLogResponse,
-    ErrorResponse,
     GDPRErasureRequest,
     GDPRErasureResponse,
     GDPRExportRequest,
+    GDPRExportState,
     GDPRExportStatus,
     PaginationMeta,
     RetentionPolicyRequest,
     RetentionPolicyResponse,
 )
+
+if TYPE_CHECKING:
+    from application.services.gdpr_service import GDPRService
 
 router = APIRouter(prefix="/tenants/{tenant_id}", tags=["GDPR & Compliance"])
 
@@ -43,11 +44,11 @@ async def request_data_export(
     service: GDPRService = Depends(get_gdpr_service),
 ) -> GDPRExportStatus:
     job_id = service.export_tenant_data(tenant_id)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     return GDPRExportStatus(
         job_id=uuid.UUID(job_id) if len(job_id) == 32 else uuid.uuid4(),
         tenant_id=tenant_id,
-        status="PENDING",
+        status=GDPRExportState.PENDING,
         requested_at=now,
     )
 
@@ -59,17 +60,17 @@ async def get_export_status(
     service: GDPRService = Depends(get_gdpr_service),
 ) -> GDPRExportStatus:
     try:
-        status_obj = service.get_export_status(str(job_id))
-    except ValueError:
+        service.get_export_status(str(job_id))
+    except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Export job '{job_id}' not found for tenant '{tenant_id}'.",
-        )
+        ) from exc
     return GDPRExportStatus(
         job_id=job_id,
         tenant_id=tenant_id,
-        status="PENDING",
-        requested_at=datetime.now(timezone.utc),
+        status=GDPRExportState.PENDING,
+        requested_at=datetime.now(UTC),
     )
 
 
@@ -92,7 +93,9 @@ async def request_erasure(
     )
 
 
-@router.get("/gdpr/retention", response_model=RetentionPolicyResponse, summary="Get retention policy")
+@router.get(
+    "/gdpr/retention", response_model=RetentionPolicyResponse, summary="Get retention policy"
+)
 async def get_retention_policy(
     tenant_id: TenantID,
     service: GDPRService = Depends(get_gdpr_service),
@@ -116,7 +119,7 @@ async def update_retention_policy(
     tenant_id: TenantID,
     body: RetentionPolicyRequest,
 ) -> RetentionPolicyResponse:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     return RetentionPolicyResponse(
         tenant_id=tenant_id,
         default_retention_days=body.default_retention_days,

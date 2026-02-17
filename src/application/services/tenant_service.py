@@ -9,21 +9,21 @@ infrastructure details upward.
 from __future__ import annotations
 
 import logging
-from abc import ABC, abstractmethod
-from datetime import datetime, timezone
-from typing import Any, Optional, Protocol
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Any, Protocol
 from uuid import UUID, uuid4
 
+from application.schemas.pagination import PaginatedResponse, PaginationParams
 from domain.exceptions import (
     InvalidStateTransitionError,
     TenantAlreadyExistsError,
     TenantNotFoundError,
 )
 from domain.models.audit import AuditAction, AuditEntry
-from domain.models.tenant import Tenant, TenantSettings, TenantStatus
-from domain.services.tenant_lifecycle import TenantLifecycleService
+from domain.models.tenant import Tenant, TenantStatus
 
-from application.schemas.pagination import PaginatedResponse, PaginationParams
+if TYPE_CHECKING:
+    from domain.services.tenant_lifecycle import TenantLifecycleService
 
 logger = logging.getLogger(__name__)
 
@@ -32,18 +32,19 @@ logger = logging.getLogger(__name__)
 # Repository / infrastructure port interfaces (dependency-inversion)
 # ---------------------------------------------------------------------------
 
+
 class TenantRepository(Protocol):
     """Port: persistence operations for :class:`Tenant` aggregates."""
 
-    def get_by_id(self, tenant_id: UUID) -> Optional[Tenant]: ...
+    def get_by_id(self, tenant_id: UUID) -> Tenant | None: ...
 
-    def get_by_slug(self, slug: str) -> Optional[Tenant]: ...
+    def get_by_slug(self, slug: str) -> Tenant | None: ...
 
     def list_tenants(
         self,
         offset: int,
         limit: int,
-        status_filter: Optional[TenantStatus] = None,
+        status_filter: TenantStatus | None = None,
     ) -> tuple[list[Tenant], int]: ...
 
     def save(self, tenant: Tenant) -> Tenant: ...
@@ -54,7 +55,7 @@ class TenantRepository(Protocol):
 class AuditRepository(Protocol):
     """Port: persistence for tamper-evident audit entries."""
 
-    def get_latest_entry(self, tenant_id: UUID) -> Optional[AuditEntry]: ...
+    def get_latest_entry(self, tenant_id: UUID) -> AuditEntry | None: ...
 
     def save(self, entry: AuditEntry) -> AuditEntry: ...
 
@@ -79,6 +80,7 @@ class EventPublisher(Protocol):
 # Service
 # ---------------------------------------------------------------------------
 
+
 class TenantService:
     """Orchestrates all tenant CRUD and lifecycle operations."""
 
@@ -102,8 +104,8 @@ class TenantService:
         self,
         tenant_id: UUID,
         action: AuditAction,
-        actor_id: Optional[UUID] = None,
-        details: Optional[dict[str, Any]] = None,
+        actor_id: UUID | None = None,
+        details: dict[str, Any] | None = None,
     ) -> AuditEntry:
         """Build a chained audit entry and persist it."""
         latest = self._audit_repo.get_latest_entry(tenant_id)
@@ -115,7 +117,7 @@ class TenantService:
             action=action,
             actor_id=actor_id or UUID(int=0),
             details=details or {},
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             previous_hash=previous_hash,
         )
         return self._audit_repo.save(entry)
@@ -128,7 +130,7 @@ class TenantService:
                 new_state=new_status.value,
             )
         tenant.status = new_status
-        tenant.updated_at = datetime.now(timezone.utc)
+        tenant.updated_at = datetime.now(UTC)
         return self._tenant_repo.update(tenant)
 
     # -- public API -------------------------------------------------------
@@ -138,7 +140,7 @@ class TenantService:
         name: str,
         slug: str,
         owner_email: str,
-        settings: Optional[dict[str, Any]] = None,
+        settings: dict[str, Any] | None = None,
     ) -> Tenant:
         """Provision a new tenant end-to-end.
 
@@ -160,8 +162,8 @@ class TenantService:
             status=TenantStatus.PENDING,
             schema_name=schema_name,
             settings=settings or {},
-            created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
         )
         tenant = self._tenant_repo.save(tenant)
         logger.info("Tenant %s created in PENDING state", tenant.id)
@@ -212,7 +214,7 @@ class TenantService:
         self,
         page: int = 1,
         size: int = 20,
-        status_filter: Optional[TenantStatus] = None,
+        status_filter: TenantStatus | None = None,
     ) -> PaginatedResponse[Tenant]:
         """Return a paginated list of tenants, optionally filtered by status."""
         params = PaginationParams(page=page, size=size)
@@ -241,7 +243,7 @@ class TenantService:
             if key in allowed_fields:
                 setattr(tenant, key, value)
 
-        tenant.updated_at = datetime.now(timezone.utc)
+        tenant.updated_at = datetime.now(UTC)
         tenant = self._tenant_repo.update(tenant)
 
         self._create_audit_entry(

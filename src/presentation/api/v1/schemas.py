@@ -22,10 +22,10 @@ from pydantic import (
     field_validator,
 )
 
-
 # ---------------------------------------------------------------------------
 # Enumerations
 # ---------------------------------------------------------------------------
+
 
 class TenantStatus(str, Enum):
     ACTIVE = "ACTIVE"
@@ -79,6 +79,7 @@ class AuditAction(str, Enum):
 # Base / shared
 # ---------------------------------------------------------------------------
 
+
 class _CamelModel(BaseModel):
     """Base model with camelCase alias generation disabled -- we use snake_case
     throughout for consistency with Python conventions."""
@@ -94,9 +95,7 @@ class PaginationParams(BaseModel):
     """Query parameters shared by all paginated list endpoints."""
 
     page: int = Field(default=1, ge=1, description="Page number (1-indexed).")
-    page_size: int = Field(
-        default=20, ge=1, le=100, description="Items per page (max 100)."
-    )
+    page_size: int = Field(default=20, ge=1, le=100, description="Items per page (max 100).")
 
 
 class PaginationMeta(BaseModel):
@@ -111,6 +110,7 @@ class PaginationMeta(BaseModel):
 # ---------------------------------------------------------------------------
 # RFC 9457 Problem Details error response
 # ---------------------------------------------------------------------------
+
 
 class ErrorResponse(_CamelModel):
     """Error response following RFC 9457 Problem Details for HTTP APIs.
@@ -152,6 +152,7 @@ class ErrorResponse(_CamelModel):
 # ---------------------------------------------------------------------------
 # Tenant schemas
 # ---------------------------------------------------------------------------
+
 
 class TenantCreate(_CamelModel):
     """Request body for creating a new tenant."""
@@ -209,12 +210,18 @@ class TenantUpdate(_CamelModel):
 class TenantResponse(_CamelModel):
     """Representation of a tenant returned by the API."""
 
-    id: uuid.UUID = Field(..., description="Unique tenant identifier.", examples=["550e8400-e29b-41d4-a716-446655440000"])
+    id: uuid.UUID = Field(
+        ...,
+        description="Unique tenant identifier.",
+        examples=["550e8400-e29b-41d4-a716-446655440000"],
+    )
     name: str = Field(..., examples=["Acme GmbH"])
     slug: str = Field(..., examples=["acme-gmbh"])
     status: TenantStatus = Field(..., examples=["ACTIVE"])
     tier: TenantTier = Field(..., examples=["PROFESSIONAL"])
-    schema_name: str = Field(..., description="Postgres schema name.", examples=["tenant_acme_gmbh"])
+    schema_name: str = Field(
+        ..., description="Postgres schema name.", examples=["tenant_acme_gmbh"]
+    )
     data_residency_region: str = Field(..., examples=["eu-central-1"])
     admin_email: EmailStr = Field(..., examples=["admin@acme.example"])
     metadata: dict[str, Any] | None = None
@@ -232,6 +239,7 @@ class TenantListResponse(_CamelModel):
 # ---------------------------------------------------------------------------
 # Auth / User schemas
 # ---------------------------------------------------------------------------
+
 
 class UserRegister(_CamelModel):
     """Request body for registering a new user within a tenant."""
@@ -305,6 +313,7 @@ class UserResponse(_CamelModel):
 # ---------------------------------------------------------------------------
 # Billing / Cost schemas
 # ---------------------------------------------------------------------------
+
 
 class CostLineItem(BaseModel):
     """Single cost item within a breakdown."""
@@ -392,6 +401,7 @@ class AnomalyListResponse(_CamelModel):
 # ---------------------------------------------------------------------------
 # GDPR schemas
 # ---------------------------------------------------------------------------
+
 
 class GDPRExportRequest(_CamelModel):
     """Request body for initiating a GDPR data export (Article 20)."""

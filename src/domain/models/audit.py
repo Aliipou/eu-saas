@@ -3,7 +3,7 @@ from __future__ import annotations
 import enum
 import hashlib
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -27,7 +27,7 @@ def _compute_entry_hash(
     tenant_id: UUID,
     timestamp: datetime,
 ) -> str:
-    payload = f"{previous_hash}{action.value}{str(tenant_id)}{timestamp.isoformat()}"
+    payload = f"{previous_hash}{action.value}{tenant_id!s}{timestamp.isoformat()}"
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
@@ -38,7 +38,7 @@ class AuditEntry:
     action: AuditAction = AuditAction.TENANT_CREATED
     actor_id: UUID = field(default_factory=uuid4)
     details: dict[str, Any] = field(default_factory=dict)
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
     previous_hash: str = ""
     entry_hash: str = field(default="", init=False)
 

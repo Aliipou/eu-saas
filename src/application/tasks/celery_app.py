@@ -56,7 +56,7 @@ app.conf.task_annotations = {
 app.conf.task_acks_late = True
 app.conf.worker_prefetch_multiplier = 1
 app.conf.task_track_started = True
-app.conf.task_time_limit = 3600       # hard limit: 1 hour
+app.conf.task_time_limit = 3600  # hard limit: 1 hour
 app.conf.task_soft_time_limit = 3300  # soft limit: 55 minutes
 app.conf.timezone = "UTC"
 

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 
-class DomainException(Exception):
+class DomainError(Exception):
     """Base class for all domain-layer exceptions.
 
     Carries HTTP-mapping metadata so the presentation layer can produce
@@ -23,7 +23,7 @@ class DomainException(Exception):
         self.error_type = error_type
 
 
-class TenantNotFoundError(DomainException):
+class TenantNotFoundError(DomainError):
     def __init__(self, tenant_id: str = "") -> None:
         self.tenant_id = tenant_id
         super().__init__(
@@ -34,7 +34,7 @@ class TenantNotFoundError(DomainException):
         )
 
 
-class InvalidStateTransitionError(DomainException):
+class InvalidStateTransitionError(DomainError):
     def __init__(self, current_state: str = "", new_state: str = "") -> None:
         self.current_state = current_state
         self.new_state = new_state
@@ -46,7 +46,7 @@ class InvalidStateTransitionError(DomainException):
         )
 
 
-class TenantAlreadyExistsError(DomainException):
+class TenantAlreadyExistsError(DomainError):
     def __init__(self, identifier: str = "") -> None:
         self.identifier = identifier
         super().__init__(
@@ -57,7 +57,7 @@ class TenantAlreadyExistsError(DomainException):
         )
 
 
-class CrossTenantAccessError(DomainException):
+class CrossTenantAccessError(DomainError):
     def __init__(self, source_tenant: str = "", target_tenant: str = "") -> None:
         self.source_tenant = source_tenant
         self.target_tenant = target_tenant
@@ -69,7 +69,7 @@ class CrossTenantAccessError(DomainException):
         )
 
 
-class SchemaCreationError(DomainException):
+class SchemaCreationError(DomainError):
     def __init__(self, schema_name: str = "", reason: str = "") -> None:
         self.schema_name = schema_name
         self.reason = reason
@@ -81,7 +81,7 @@ class SchemaCreationError(DomainException):
         )
 
 
-class TenantQuotaExceededError(DomainException):
+class TenantQuotaExceededError(DomainError):
     def __init__(self, tenant_id: str = "", resource: str = "", limit: str = "") -> None:
         self.tenant_id = tenant_id
         self.resource = resource
