@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mt-platform
+  labels:
+    app.kubernetes.io/name: eu-multi-tenant-platform
+    app.kubernetes.io/part-of: mt-platform
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mt-observability
+  labels:
+    app.kubernetes.io/name: observability
+    app.kubernetes.io/part-of: mt-platform

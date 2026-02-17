@@ -1,0 +1,60 @@
+[default]
+app_name = "EU Multi-Tenant Platform"
+app_version = "1.0.0"
+debug = false
+log_level = "INFO"
+environment = "production"
+
+[default.database]
+host = "localhost"
+port = 5432
+name = "multitenant"
+pool_size = 20
+max_overflow = 10
+pool_timeout = 30
+
+[default.redis]
+url = "redis://localhost:6379/0"
+
+[default.auth]
+access_token_expire_minutes = 15
+refresh_token_expire_days = 7
+algorithm = "RS256"
+issuer = "eu-mt-platform"
+
+[default.billing]
+currency = "EUR"
+cpu_price_per_hour = 0.02
+memory_price_per_gb_hour = 0.005
+storage_price_per_gb_day = 0.01
+network_price_per_gb = 0.001
+api_call_price = 0.0001
+
+[default.gdpr]
+default_retention_days = 90
+grace_period_days = 30
+export_format = "json"
+erasure_timeout_hours = 72
+
+[default.anomaly_detection]
+threshold_std_dev = 2.5
+rolling_window_days = 7
+check_interval_minutes = 15
+
+[development]
+debug = true
+log_level = "DEBUG"
+
+[development.database]
+host = "localhost"
+pool_size = 5
+max_overflow = 5
+
+[testing]
+debug = true
+log_level = "DEBUG"
+
+[testing.database]
+host = "localhost"
+name = "test_multitenant"
+pool_size = 5
